@@ -1,0 +1,102 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+
+const schema = z.object({
+  nome: z.string().min(1, "Nome obrigatório"),
+  data: z.string().min(1, "Data obrigatória"),
+  local: z.string().optional(),
+  tipo: z.string().optional(),
+  descricao: z.string().optional(),
+});
+
+type Form = z.infer<typeof schema>;
+
+export const DialogNovoEvento = ({
+  aberto,
+  onFechar,
+}: {
+  aberto: boolean;
+  onFechar: () => void;
+}) => {
+  const router = useRouter();
+  const [carregando, setCarregando] = useState(false);
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<Form>({
+    resolver: zodResolver(schema),
+  });
+
+  const onSubmit = async (dados: Form) => {
+    setCarregando(true);
+    try {
+      const resp = await fetch("/api/eventos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dados),
+      });
+      const json = await resp.json();
+      if (json.success) {
+        toast.success("Evento criado com sucesso!");
+        reset();
+        onFechar();
+        router.refresh();
+      } else {
+        toast.error("Erro ao criar evento");
+      }
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  return (
+    <Dialog open={aberto} onOpenChange={(v) => !v && onFechar()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Novo Evento</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="nome">Nome *</Label>
+            <Input id="nome" {...register("nome")} placeholder="Nome do evento" />
+            {errors.nome && <p className="text-xs text-destructive">{errors.nome.message}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="data">Data *</Label>
+            <Input id="data" type="datetime-local" {...register("data")} />
+            {errors.data && <p className="text-xs text-destructive">{errors.data.message}</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="local">Local</Label>
+            <Input id="local" {...register("local")} placeholder="Local do evento" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="tipo">Tipo</Label>
+            <Input id="tipo" {...register("tipo")} placeholder="Cultural, Educacional, Webinar..." />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="descricao">Descrição</Label>
+            <Textarea id="descricao" {...register("descricao")} placeholder="Descrição do evento..." rows={3} />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={onFechar}>
+              Cancelar
+            </Button>
+            <Button type="submit" className="flex-1" disabled={carregando}>
+              {carregando ? "Salvando..." : "Criar Evento"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};

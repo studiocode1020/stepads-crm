@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Contact {
+  id             String    @id @default(cuid())
+  nome           String
+  email          String?   @unique
+  telefone       String?   @unique
+  dataNascimento DateTime?
+  observacoes    String?   @db.Text
+  criadoEm      DateTime  @default(now())
+  atualizadoEm  DateTime  @updatedAt
+
+  participacoes EventParticipation[]
+  tags          ContactTag[]
+
+  @@map("contacts")
+}
+
+model Company {
+  id           String   @id @default(cuid())
+  nome         String
+  cnpj         String?  @unique
+  email        String?
+  telefone     String?
+  site         String?
+  observacoes  String?  @db.Text
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  eventos Event[]
+
+  @@map("companies")
+}
+
+model Event {
+  id           String   @id @default(cuid())
+  nome         String
+  data         DateTime
+  local        String?
+  tipo         String?
+  descricao    String?  @db.Text
+  companyId    String?
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  company       Company?             @relation(fields: [companyId], references: [id])
+  participacoes EventParticipation[]
+  importLogs    ImportLog[]
+
+  @@map("events")
+}
+
+model EventParticipation {
+  id        String   @id @default(cuid())
+  contactId String
+  eventId   String
+  criadoEm DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, eventId])
+  @@map("event_participations")
+}
+
+model Tag {
+  id   String @id @default(cuid())
+  nome String @unique
+  cor  String @default("#534AB7")
+
+  contacts ContactTag[]
+
+  @@map("tags")
+}
+
+model ContactTag {
+  contactId String
+  tagId     String
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@map("contact_tags")
+}
+
+model ImportLog {
+  id            String   @id @default(cuid())
+  nomeArquivo   String
+  eventId       String?
+  totalLinhas   Int
+  novosContatos Int
+  duplicados    Int
+  erros         Int
+  criadoEm     DateTime @default(now())
+
+  event Event? @relation(fields: [eventId], references: [id])
+
+  @@map("import_logs")
+}
