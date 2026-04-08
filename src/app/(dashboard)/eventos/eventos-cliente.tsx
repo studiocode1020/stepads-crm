@@ -23,8 +23,17 @@ type Evento = {
   data: Date;
   local: string | null;
   tipo: string | null;
+  status: string;
+  capacidade: number | null;
   company: { id: string; nome: string } | null;
   _count: { participacoes: number };
+};
+
+const STATUS_ESTILOS: Record<string, { label: string; classe: string }> = {
+  planejamento: { label: "Em Planejamento", classe: "bg-blue-100 text-blue-800" },
+  confirmado:   { label: "Confirmado",      classe: "bg-emerald-100 text-emerald-800" },
+  realizado:    { label: "Realizado",       classe: "bg-gray-100 text-gray-700" },
+  cancelado:    { label: "Cancelado",       classe: "bg-red-100 text-red-700" },
 };
 
 type Props = {
@@ -116,6 +125,17 @@ export const EventosCliente = ({ eventos, total, paginas, paginaAtual, buscaInic
                     )}
                   </div>
 
+                  <div className="mb-2">
+                    {(() => {
+                      const s = STATUS_ESTILOS[e.status] ?? STATUS_ESTILOS.planejamento;
+                      return (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.classe}`}>
+                          {s.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+
                   <div className="space-y-1.5 mb-4">
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
@@ -134,6 +154,21 @@ export const EventosCliente = ({ eventos, total, paginas, paginaAtual, buscaInic
                       </div>
                     )}
                   </div>
+
+                  {e.capacidade && (
+                    <div className="mb-3">
+                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                        <span>{e._count.participacoes} confirmados</span>
+                        <span>cap. {e.capacidade.toLocaleString("pt-BR")}</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5">
+                        <div
+                          className="bg-primary h-1.5 rounded-full transition-all"
+                          style={{ width: `${Math.min(100, (e._count.participacoes / e.capacidade) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between">
                     <Badge variant="secondary" className="gap-1">

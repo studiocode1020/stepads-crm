@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Upload, FileSpreadsheet, ArrowRight, CheckCircle, AlertCircle,
   RefreshCw, Send, History, MessageSquare, DollarSign, Users, XCircle,
+  Database, Search, CheckSquare, Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +21,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ---------- Types ----------
 
+type Origem = "planilha" | "crm";
 type Etapa = "upload" | "mapeamento" | "simulacao" | "disparando" | "resultado";
+
+type ContatoCRM = {
+  id: string;
+  nome: string;
+  telefone: string;
+  email: string | null;
+};
 
 type Campanha = {
   id: string;
@@ -42,6 +51,9 @@ type ResultadoDisparo = {
   falhas: number;
   custoTotal: number;
 };
+
+type Evento = { id: string; nome: string };
+type Tag = { id: string; nome: string; cor: string };
 
 const CAMPOS_SISTEMA = [
   { value: "", label: "— Ignorar coluna —" },
@@ -155,16 +167,203 @@ const Historico = () => {
   );
 };
 
-// ---------- Wizard de nova campanha ----------
+// ---------- Seletor de contatos do CRM ----------
+
+const SeletorCRM = ({
+  onConfirmar,
+}: {
+  onConfirmar: (contatos: ContatoCRM[]) => void;
+}) => {
+  const [contatos, setContatos] = useState<ContatoCRM[]>([]);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [carregando, setCarregando] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [filtroTag, setFiltroTag] = useState("");
+  const [filtroEvento, setFiltroEvento] = useState("");
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [eventos, setEventos] = useState<Evento[]>([]);
+
+  // Carregar tags e eventos para os filtros
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/tags").then((r) => r.json()),
+      fetch("/api/eventos").then((r) => r.json()),
+    ]).then(([tagsJson, eventosJson]) => {
+      if (tagsJson.success) setTags(tagsJson.data);
+      if (eventosJson.success) setEventos(eventosJson.data?.eventos ?? []);
+    }).catch(() => {});
+  }, []);
+
+  const buscarContatos = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const params = new URLSearchParams();
+      if (filtroTag) params.set("tagId", filtroTag);
+      if (filtroEvento) params.set("eventoId", filtroEvento);
+      const resp = await fetch(`/api/automacoes/contatos?${params}`);
+      const json = await resp.json();
+      if (json.success) {
+        setContatos(json.data);
+        setSelecionados(new Set(json.data.map((c: ContatoCRM) => c.id)));
+      }
+    } catch {
+      toast.error("Erro ao carregar contatos");
+    } finally {
+      setCarregando(false);
+    }
+  }, [filtroTag, filtroEvento]);
+
+  useEffect(() => { buscarContatos(); }, [buscarContatos]);
+
+  const contatosFiltrados = contatos.filter((c) =>
+    busca ? c.nome.toLowerCase().includes(busca.toLowerCase()) || (c.telefone ?? "").includes(busca) : true
+  );
+
+  const toggleTodos = () => {
+    if (selecionados.size === contatosFiltrados.length) {
+      setSelecionados(new Set());
+    } else {
+      setSelecionados(new Set(contatosFiltrados.map((c) => c.id)));
+    }
+  };
+
+  const toggleContato = (id: string) => {
+    setSelecionados((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const contatosSelecionados = contatos.filter((c) => selecionados.has(c.id));
+
+  return (
+    <div className="space-y-4">
+      {/* Filtros */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome ou telefone..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={filtroTag || "todos"} onValueChange={(v) => setFiltroTag(v === "todos" ? "" : (v ?? ""))}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filtrar por tag" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as tags</SelectItem>
+            {tags.map((t) => (
+              <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filtroEvento || "todos"} onValueChange={(v) => setFiltroEvento(v === "todos" ? "" : (v ?? ""))}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filtrar por evento" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os eventos</SelectItem>
+            {eventos.map((e) => (
+              <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Contador e seleção em massa */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button onClick={toggleTodos} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            {selecionados.size === contatosFiltrados.length && contatosFiltrados.length > 0
+              ? <CheckSquare className="w-4 h-4 text-primary" />
+              : <Square className="w-4 h-4" />}
+            Selecionar todos
+          </button>
+          {selecionados.size > 0 && (
+            <Badge variant="secondary" className="text-xs">
+              {selecionados.size} selecionado(s)
+            </Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {carregando ? "Carregando..." : `${contatosFiltrados.length} contato(s) com telefone`}
+        </p>
+      </div>
+
+      {/* Lista */}
+      <div className="rounded-xl border overflow-hidden max-h-72 overflow-y-auto">
+        {carregando ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Carregando...
+          </div>
+        ) : contatosFiltrados.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+            <Users className="w-8 h-8 opacity-30" />
+            <p className="text-sm">Nenhum contato com telefone encontrado</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="w-10"></TableHead>
+                <TableHead>Nome</TableHead>
+                <TableHead>Telefone</TableHead>
+                <TableHead>E-mail</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {contatosFiltrados.map((c) => (
+                <TableRow
+                  key={c.id}
+                  className="cursor-pointer"
+                  onClick={() => toggleContato(c.id)}
+                >
+                  <TableCell>
+                    {selecionados.has(c.id)
+                      ? <CheckSquare className="w-4 h-4 text-primary" />
+                      : <Square className="w-4 h-4 text-muted-foreground" />}
+                  </TableCell>
+                  <TableCell className="text-sm font-medium">{c.nome}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{c.telefone}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{c.email ?? "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+
+      <Button
+        onClick={() => onConfirmar(contatosSelecionados)}
+        disabled={contatosSelecionados.length === 0}
+      >
+        Usar {contatosSelecionados.length} contato(s) selecionado(s)
+      </Button>
+    </div>
+  );
+};
+
+// ---------- Wizard principal ----------
 
 export const AutomacoesCliente = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [etapa, setEtapa] = useState<Etapa>("upload");
+  const [origem, setOrigem] = useState<Origem>("planilha");
+
+  // Planilha
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [colunas, setColunas] = useState<string[]>([]);
   const [preview, setPreview] = useState<Record<string, string>[]>([]);
   const [totalLinhas, setTotalLinhas] = useState(0);
   const [mapeamento, setMapeamento] = useState<Record<string, string>>({});
+
+  // CRM
+  const [contatosCRM, setContatosCRM] = useState<ContatoCRM[]>([]);
+
   const [carregando, setCarregando] = useState(false);
   const [progresso, setProgresso] = useState(0);
 
@@ -176,8 +375,9 @@ export const AutomacoesCliente = () => {
 
   const [resultado, setResultado] = useState<ResultadoDisparo | null>(null);
 
+  const totalDisponivel = origem === "crm" ? contatosCRM.length : totalLinhas;
   const quantidadeNum = parseInt(quantidade, 10);
-  const quantidadeValida = !isNaN(quantidadeNum) && quantidadeNum > 0 && quantidadeNum <= totalLinhas;
+  const quantidadeValida = !isNaN(quantidadeNum) && quantidadeNum > 0 && quantidadeNum <= totalDisponivel;
   const custoEstimado = quantidadeValida ? parseFloat((quantidadeNum * custoUnitario).toFixed(2)) : 0;
 
   const handleArquivo = async (file: File) => {
@@ -210,19 +410,33 @@ export const AutomacoesCliente = () => {
     }
   };
 
+  const handleConfirmarCRM = (contatos: ContatoCRM[]) => {
+    setContatosCRM(contatos);
+    setQuantidade(String(contatos.length));
+    setEtapa("simulacao");
+  };
+
   const handleDisparar = async () => {
-    if (!arquivo || !nomeCampanha || !mensagem || !quantidadeValida) return;
+    if (!nomeCampanha || !mensagem || !quantidadeValida) return;
     setEtapa("disparando");
     setProgresso(10);
     setCarregando(true);
 
     try {
       const form = new FormData();
-      form.append("arquivo", arquivo);
       form.append("nomeCampanha", nomeCampanha);
       form.append("mensagem", mensagem);
-      form.append("mapeamento", JSON.stringify(mapeamento));
       form.append("quantidade", String(quantidadeNum));
+      form.append("origem", origem);
+
+      if (origem === "crm") {
+        const selecionados = contatosCRM.slice(0, quantidadeNum);
+        form.append("contatosJson", JSON.stringify(selecionados.map((c) => ({ nome: c.nome, telefone: c.telefone }))));
+      } else {
+        if (!arquivo) return;
+        form.append("arquivo", arquivo);
+        form.append("mapeamento", JSON.stringify(mapeamento));
+      }
 
       setProgresso(30);
       const resp = await fetch("/api/automacoes/disparar", { method: "POST", body: form });
@@ -243,11 +457,13 @@ export const AutomacoesCliente = () => {
 
   const reiniciar = () => {
     setEtapa("upload");
+    setOrigem("planilha");
     setArquivo(null);
     setColunas([]);
     setPreview([]);
     setTotalLinhas(0);
     setMapeamento({});
+    setContatosCRM([]);
     setNomeCampanha("");
     setQuantidade("");
     setMensagem("");
@@ -332,52 +548,71 @@ export const AutomacoesCliente = () => {
 
       <TabsContent value="nova" className="space-y-4">
 
-        {/* ---- UPLOAD ---- */}
+        {/* ---- UPLOAD / SELEÇÃO ---- */}
         {etapa === "upload" && (
           <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle className="text-base">1. Importar base de contatos</CardTitle>
-              <CardDescription>Faça upload de um arquivo .xlsx ou .csv com os contatos</CardDescription>
+              <CardTitle className="text-base">1. Selecionar base de contatos</CardTitle>
+              <CardDescription>Escolha de onde virão os contatos para esta campanha</CardDescription>
             </CardHeader>
             <CardContent>
-              <div
-                className="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
-                onClick={() => inputRef.current?.click()}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const file = e.dataTransfer.files[0];
-                  if (file) handleArquivo(file);
-                }}
-              >
-                <input
-                  ref={inputRef}
-                  type="file"
-                  accept=".xlsx,.csv"
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); }}
-                />
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center">
-                    {carregando
-                      ? <RefreshCw className="w-8 h-8 text-primary animate-spin" />
-                      : <Upload className="w-8 h-8 text-primary" />}
+              <Tabs value={origem} onValueChange={(v) => setOrigem(v as Origem)}>
+                <TabsList className="mb-6 w-full sm:w-auto">
+                  <TabsTrigger value="planilha" className="flex items-center gap-2">
+                    <FileSpreadsheet className="w-4 h-4" /> Importar Planilha
+                  </TabsTrigger>
+                  <TabsTrigger value="crm" className="flex items-center gap-2">
+                    <Database className="w-4 h-4" /> Base do CRM
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* Planilha */}
+                <TabsContent value="planilha">
+                  <div
+                    className="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
+                    onClick={() => inputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files[0];
+                      if (file) handleArquivo(file);
+                    }}
+                  >
+                    <input
+                      ref={inputRef}
+                      type="file"
+                      accept=".xlsx,.csv"
+                      className="hidden"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); }}
+                    />
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center">
+                        {carregando
+                          ? <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+                          : <Upload className="w-8 h-8 text-primary" />}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900 text-lg">
+                          {carregando ? "Processando arquivo..." : "Arraste ou clique para fazer upload"}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">Suporta .xlsx e .csv</p>
+                      </div>
+                      {!carregando && <Button variant="outline">Selecionar arquivo</Button>}
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-900 text-lg">
-                      {carregando ? "Processando arquivo..." : "Arraste ou clique para fazer upload"}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">Suporta .xlsx e .csv</p>
-                  </div>
-                  {!carregando && <Button variant="outline">Selecionar arquivo</Button>}
-                </div>
-              </div>
+                </TabsContent>
+
+                {/* Base do CRM */}
+                <TabsContent value="crm">
+                  <SeletorCRM onConfirmar={handleConfirmarCRM} />
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         )}
 
-        {/* ---- MAPEAMENTO ---- */}
-        {etapa === "mapeamento" && (
+        {/* ---- MAPEAMENTO (apenas planilha) ---- */}
+        {etapa === "mapeamento" && origem === "planilha" && (
           <>
             <Card className="shadow-sm">
               <CardHeader>
@@ -413,7 +648,6 @@ export const AutomacoesCliente = () => {
                     </div>
                   ))}
                 </div>
-
                 {(!temNome || !temTelefone) && (
                   <p className="flex items-center gap-1.5 text-sm text-amber-600">
                     <AlertCircle className="w-4 h-4" />
@@ -451,7 +685,7 @@ export const AutomacoesCliente = () => {
 
             <div className="flex gap-3">
               <Button variant="outline" onClick={reiniciar}>Cancelar</Button>
-              <Button onClick={() => setEtapa("simulacao")} disabled={!temNome || !temTelefone}>
+              <Button onClick={() => { setQuantidade(String(totalLinhas)); setEtapa("simulacao"); }} disabled={!temNome || !temTelefone}>
                 Próximo: Configurar Disparo
               </Button>
             </div>
@@ -461,38 +695,53 @@ export const AutomacoesCliente = () => {
         {/* ---- SIMULAÇÃO + MENSAGEM ---- */}
         {etapa === "simulacao" && (
           <>
-            {/* Resumo da base */}
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary" />
-                  3. Resumo da Base
+                  {origem === "crm" ? "2." : "3."} Resumo da Base
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-blue-50 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-blue-700">{totalLinhas}</p>
-                    <p className="text-sm text-blue-600 mt-1">Total importado</p>
+                    <p className="text-3xl font-bold text-blue-700">{totalDisponivel}</p>
+                    <p className="text-sm text-blue-600 mt-1">
+                      {origem === "crm" ? "Contatos selecionados" : "Total importado"}
+                    </p>
                   </div>
                   <div className="bg-emerald-50 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-emerald-700">{totalLinhas}</p>
-                    <p className="text-sm text-emerald-600 mt-1">Com telefone mapeado</p>
+                    <p className="text-3xl font-bold text-emerald-700">{totalDisponivel}</p>
+                    <p className="text-sm text-emerald-600 mt-1">Com telefone</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl p-4 text-center">
                     <p className="text-3xl font-bold text-gray-700">{formatarMoeda(custoUnitario)}</p>
                     <p className="text-sm text-gray-600 mt-1">Custo por mensagem</p>
                   </div>
                 </div>
+
+                {origem === "crm" && contatosCRM.length > 0 && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-center gap-2">
+                    <Database className="w-4 h-4 text-blue-600" />
+                    <p className="text-sm text-blue-700">
+                      Usando <strong>{contatosCRM.length} contatos</strong> da base do CRM
+                    </p>
+                    <button
+                      onClick={() => setEtapa("upload")}
+                      className="ml-auto text-xs text-blue-600 underline hover:no-underline"
+                    >
+                      Alterar seleção
+                    </button>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Configuração */}
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <DollarSign className="w-5 h-5 text-primary" />
-                  4. Simulação de Disparos
+                  {origem === "crm" ? "3." : "4."} Simulação de Disparos
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -505,27 +754,24 @@ export const AutomacoesCliente = () => {
                     className="max-w-sm"
                   />
                 </div>
-
                 <Separator />
-
                 <div className="space-y-2">
-                  <Label>Quantidade de disparos desejada (máx: {totalLinhas})</Label>
+                  <Label>Quantidade de disparos desejada (máx: {totalDisponivel})</Label>
                   <Input
                     type="number"
-                    placeholder={`1 a ${totalLinhas}`}
+                    placeholder={`1 a ${totalDisponivel}`}
                     min={1}
-                    max={totalLinhas}
+                    max={totalDisponivel}
                     value={quantidade}
                     onChange={(e) => setQuantidade(e.target.value)}
                     className="max-w-xs"
                   />
                   {quantidade && !quantidadeValida && (
                     <p className="text-sm text-red-500 flex items-center gap-1">
-                      <XCircle className="w-4 h-4" /> Informe um número entre 1 e {totalLinhas}
+                      <XCircle className="w-4 h-4" /> Informe um número entre 1 e {totalDisponivel}
                     </p>
                   )}
                 </div>
-
                 {quantidadeValida && (
                   <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 flex items-center justify-between">
                     <div>
@@ -540,12 +786,11 @@ export const AutomacoesCliente = () => {
               </CardContent>
             </Card>
 
-            {/* Mensagem */}
             <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <MessageSquare className="w-5 h-5 text-primary" />
-                  5. Mensagem / Template
+                  {origem === "crm" ? "4." : "5."} Mensagem / Template
                 </CardTitle>
                 <CardDescription>Texto que será enviado para todos os contatos</CardDescription>
               </CardHeader>
@@ -561,7 +806,7 @@ export const AutomacoesCliente = () => {
             </Card>
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setEtapa("mapeamento")}>Voltar</Button>
+              <Button variant="outline" onClick={() => setEtapa(origem === "crm" ? "upload" : "mapeamento")}>Voltar</Button>
               <Button
                 onClick={handleDisparar}
                 disabled={!nomeCampanha || !mensagem || !quantidadeValida}

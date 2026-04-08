@@ -6,7 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Calendar, MapPin, Building2, Users, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Building2, Users, Mail, Phone, DollarSign } from "lucide-react";
+
+const STATUS_ESTILOS: Record<string, { label: string; classe: string }> = {
+  planejamento: { label: "Em Planejamento", classe: "bg-blue-100 text-blue-800" },
+  confirmado:   { label: "Confirmado",      classe: "bg-emerald-100 text-emerald-800" },
+  realizado:    { label: "Realizado",       classe: "bg-gray-100 text-gray-700" },
+  cancelado:    { label: "Cancelado",       classe: "bg-red-100 text-red-700" },
+};
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +24,8 @@ const DetalheEventoPage = async ({ params }: { params: Promise<{ id: string }> }
   if (!evento) notFound();
 
   const totalParticipantes = evento._count.participacoes;
+  const statusInfo = STATUS_ESTILOS[evento.status] ?? STATUS_ESTILOS.planejamento;
+  const ocupacao = evento.capacidade ? Math.round((totalParticipantes / evento.capacidade) * 100) : null;
 
   return (
     <div className="p-8 max-w-5xl">
@@ -34,9 +43,14 @@ const DetalheEventoPage = async ({ params }: { params: Promise<{ id: string }> }
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <h1 className="text-2xl font-bold text-gray-900 flex-1">{evento.nome}</h1>
-                {evento.tipo && (
-                  <Badge variant="secondary" className="ml-3 flex-shrink-0">{evento.tipo}</Badge>
-                )}
+                <div className="flex gap-2 ml-3 flex-shrink-0">
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusInfo.classe}`}>
+                    {statusInfo.label}
+                  </span>
+                  {evento.tipo && (
+                    <Badge variant="secondary">{evento.tipo}</Badge>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -72,8 +86,33 @@ const DetalheEventoPage = async ({ params }: { params: Promise<{ id: string }> }
               <Users className="w-6 h-6 text-primary mx-auto mb-2" />
               <p className="text-3xl font-bold text-gray-900">{totalParticipantes}</p>
               <p className="text-sm text-muted-foreground">participantes</p>
+              {ocupacao !== null && (
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Ocupação</span>
+                    <span>{ocupacao}% de {evento.capacidade?.toLocaleString("pt-BR")}</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div
+                      className="bg-primary h-1.5 rounded-full"
+                      style={{ width: `${Math.min(100, ocupacao)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
+          {evento.orcamento && (
+            <Card className="shadow-sm">
+              <CardContent className="p-4 text-center">
+                <DollarSign className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-gray-900">
+                  {evento.orcamento.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                </p>
+                <p className="text-sm text-muted-foreground">orçamento</p>
+              </CardContent>
+            </Card>
+          )}
           {evento.importLogs.length > 0 && (
             <Card className="shadow-sm">
               <CardHeader className="pb-2 pt-4">

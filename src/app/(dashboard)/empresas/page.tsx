@@ -31,8 +31,8 @@ const EmpresasPage = async ({
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Empresas</h1>
-        <p className="text-muted-foreground mt-1">{total} empresas cadastradas</p>
+        <h1 className="text-2xl font-bold text-gray-900">Empresas Parceiras</h1>
+        <p className="text-muted-foreground mt-1">{total} empresas parceiras cadastradas</p>
       </div>
       <EmpresasCliente
         empresas={empresas}

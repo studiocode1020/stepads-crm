@@ -8,6 +8,7 @@ const criarContatoSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   telefone: z.string().optional(),
   dataNascimento: z.string().optional(),
+  origem: z.string().optional(),
   observacoes: z.string().optional(),
 });
 
@@ -42,6 +43,7 @@ export const POST = async (req: NextRequest) => {
       email: dados.email || undefined,
       telefone: dados.telefone || undefined,
       dataNascimento: dados.dataNascimento ? new Date(dados.dataNascimento) : undefined,
+      origem: dados.origem || undefined,
       observacoes: dados.observacoes || undefined,
     });
 

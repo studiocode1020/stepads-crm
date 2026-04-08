@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail, Phone, Calendar, MapPin, Building2 } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, MapPin, Building2, Radar } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -99,8 +99,35 @@ const DetalheContatoPage = async ({ params }: { params: Promise<{ id: string }> 
               <p className="text-sm text-muted-foreground mt-1">
                 evento{contato.participacoes.length !== 1 ? "s" : ""} participado{contato.participacoes.length !== 1 ? "s" : ""}
               </p>
+              <div className="mt-2">
+                {contato.participacoes.length === 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">Nenhum evento</span>
+                )}
+                {contato.participacoes.length === 1 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-medium">Novo</span>
+                )}
+                {contato.participacoes.length >= 2 && contato.participacoes.length <= 3 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Regular</span>
+                )}
+                {contato.participacoes.length >= 4 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">Frequente</span>
+                )}
+              </div>
             </CardContent>
           </Card>
+          {(contato as { origem?: string | null }).origem && (
+            <Card className="shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Radar className="w-4 h-4 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Como conheceu</p>
+                    <p className="text-sm font-medium text-gray-900">{(contato as { origem?: string | null }).origem}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Histórico de eventos */}

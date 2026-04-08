@@ -205,9 +205,13 @@ export const ContatosCliente = ({
                     {formatarData(c.dataNascimento)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className="text-xs">
-                      {c.participacoes.length} evento{c.participacoes.length !== 1 ? "s" : ""}
-                    </Badge>
+                    {(() => {
+                      const n = c.participacoes.length;
+                      if (n === 0) return <span className="text-xs text-muted-foreground">—</span>;
+                      if (n >= 4) return <Badge className="text-xs bg-violet-600 hover:bg-violet-700">Frequente · {n}x</Badge>;
+                      if (n >= 2) return <Badge className="text-xs bg-emerald-600 hover:bg-emerald-700">Regular · {n}x</Badge>;
+                      return <Badge variant="secondary" className="text-xs">Novo · 1x</Badge>;
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 flex-wrap">

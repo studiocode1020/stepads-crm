@@ -59,6 +59,7 @@ model Contact {
   email          String?   @unique
   telefone       String?   @unique
   dataNascimento DateTime?
+  origem         String?
   observacoes    String?   @db.Text
   criadoEm      DateTime  @default(now())
   atualizadoEm  DateTime  @updatedAt
@@ -91,6 +92,9 @@ model Event {
   data         DateTime
   local        String?
   tipo         String?
+  status       String   @default("planejamento")
+  capacidade   Int?
+  orcamento    Float?
   descricao    String?  @db.Text
   companyId    String?
   criadoEm    DateTime @default(now())

@@ -1,6 +1,6 @@
 "use client";
 
-import { Users, Calendar, UserPlus, Cake, FileUp, TrendingUp } from "lucide-react";
+import { Users, Calendar, UserPlus, Cake, FileUp, TrendingUp, Trophy, Repeat2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatarDataHora } from "@/lib/utils";
@@ -28,6 +28,8 @@ type Metricas = {
     criadoEm: Date;
     event: { nome: string } | null;
   }[];
+  eventoMaisPopular: { nome: string; participantes: number } | null;
+  taxaRetorno: number;
 };
 
 type ContatosMes = { mes: string; total: number };
@@ -80,12 +82,26 @@ export const DashboardCliente = ({
       icone: Cake,
       cor: "text-rose-600 bg-rose-50",
     },
+    {
+      titulo: "Taxa de Retorno",
+      valor: `${metricas.taxaRetorno}%`,
+      descricao: "foram a 2+ eventos",
+      icone: Repeat2,
+      cor: "text-violet-600 bg-violet-50",
+    },
+    {
+      titulo: "Evento Mais Popular",
+      valor: metricas.eventoMaisPopular?.participantes.toLocaleString("pt-BR") ?? "—",
+      descricao: metricas.eventoMaisPopular?.nome ?? "Nenhum evento",
+      icone: Trophy,
+      cor: "text-orange-600 bg-orange-50",
+    },
   ];
 
   return (
     <div className="space-y-6">
       {/* Cards de métricas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {cards.map((card) => {
           const Icone = card.icone;
           return (
@@ -115,7 +131,7 @@ export const DashboardCliente = ({
               <TrendingUp className="w-5 h-5 text-primary" />
               <CardTitle className="text-base">Crescimento da Base</CardTitle>
             </div>
-            <CardDescription>Novos contatos nos últimos 6 meses</CardDescription>
+            <CardDescription>Novos contatos nos últimos 12 meses</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>

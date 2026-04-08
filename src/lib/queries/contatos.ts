@@ -66,6 +66,7 @@ export const criarContato = async (dados: {
   email?: string;
   telefone?: string;
   dataNascimento?: Date;
+  origem?: string;
   observacoes?: string;
 }) => {
   return prisma.contact.create({ data: dados });

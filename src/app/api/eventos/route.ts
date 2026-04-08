@@ -8,6 +8,9 @@ const criarEventoSchema = z.object({
   data: z.string(),
   local: z.string().optional(),
   tipo: z.string().optional(),
+  status: z.string().optional(),
+  capacidade: z.number().int().positive().optional(),
+  orcamento: z.number().positive().optional(),
   descricao: z.string().optional(),
   companyId: z.string().optional(),
 });

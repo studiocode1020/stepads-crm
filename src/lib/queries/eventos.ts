@@ -61,6 +61,9 @@ export const criarEvento = async (dados: {
   data: Date;
   local?: string;
   tipo?: string;
+  status?: string;
+  capacidade?: number;
+  orcamento?: number;
   descricao?: string;
   companyId?: string;
 }) => {
@@ -74,6 +77,9 @@ export const atualizarEvento = async (
     data?: Date;
     local?: string;
     tipo?: string;
+    status?: string;
+    capacidade?: number | null;
+    orcamento?: number | null;
     descricao?: string;
     companyId?: string | null;
   }

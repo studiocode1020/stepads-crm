@@ -22,7 +22,7 @@ const itensNavegacao = [
   { href: "/dashboard", label: "Dashboard", icone: LayoutDashboard },
   { href: "/contatos", label: "Contatos", icone: Users },
   { href: "/eventos", label: "Eventos", icone: Calendar },
-  { href: "/empresas", label: "Empresas", icone: Building2 },
+  { href: "/empresas", label: "Empresas Parceiras", icone: Building2 },
   { href: "/importar", label: "Importar", icone: Upload },
   { href: "/relatorios", label: "Relatórios", icone: BarChart3 },
   { href: "/automacoes", label: "Automações", icone: Zap },
