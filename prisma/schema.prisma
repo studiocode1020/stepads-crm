@@ -151,3 +151,36 @@ model ImportLog {
 
   @@map("import_logs")
 }
+
+model WhatsappCampaign {
+  id            String   @id @default(cuid())
+  nome          String
+  mensagem      String   @db.Text
+  totalContatos Int
+  enviados      Int      @default(0)
+  falhas        Int      @default(0)
+  custoUnitario Float
+  custoTotal    Float
+  status        String   @default("pendente")
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  contatos WhatsappCampaignContact[]
+
+  @@map("whatsapp_campaigns")
+}
+
+model WhatsappCampaignContact {
+  id         String    @id @default(cuid())
+  campaignId String
+  nome       String
+  telefone   String
+  status     String    @default("pendente")
+  erro       String?
+  enviadoEm  DateTime?
+  criadoEm   DateTime  @default(now())
+
+  campaign WhatsappCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_campaign_contacts")
+}
