@@ -1,6 +1,7 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
-export const buscarContatosPorEvento = async () => {
+export const buscarContatosPorEvento = unstable_cache(async () => {
   const dados = await prisma.event.findMany({
     include: { _count: { select: { participacoes: true } } },
     orderBy: { data: "desc" },
@@ -11,9 +12,9 @@ export const buscarContatosPorEvento = async () => {
     nome: e.nome,
     total: e._count.participacoes,
   }));
-};
+}, ["relatorios-contatos-por-evento"], { revalidate: 60 });
 
-export const buscarCrescimentoPorMes = async (meses = 12) => {
+export const buscarCrescimentoPorMes = unstable_cache(async (meses = 12) => {
   const inicio = new Date();
   inicio.setMonth(inicio.getMonth() - (meses - 1));
   inicio.setDate(1);
@@ -33,9 +34,9 @@ export const buscarCrescimentoPorMes = async (meses = 12) => {
     mes: d.mes,
     total: Number(d.total),
   }));
-};
+}, ["relatorios-crescimento-por-mes"], { revalidate: 60 });
 
-export const buscarTopContatos = async (limite = 10) => {
+export const buscarTopContatos = unstable_cache(async (limite = 10) => {
   const dados = await prisma.$queryRaw<
     { id: string; nome: string; email: string | null; total_eventos: bigint }[]
   >`
@@ -57,4 +58,4 @@ export const buscarTopContatos = async (limite = 10) => {
     email: d.email,
     totalEventos: Number(d.total_eventos),
   }));
-};
+}, ["relatorios-top-contatos"], { revalidate: 60 });

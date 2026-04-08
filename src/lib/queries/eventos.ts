@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
 export const buscarEventos = async ({
@@ -84,9 +85,13 @@ export const deletarEvento = async (id: string) => {
   return prisma.event.delete({ where: { id } });
 };
 
-export const listarTodosEventos = async () => {
-  return prisma.event.findMany({
-    select: { id: true, nome: true, data: true },
-    orderBy: { data: "desc" },
-  });
-};
+export const listarTodosEventos = unstable_cache(
+  async () => {
+    return prisma.event.findMany({
+      select: { id: true, nome: true, data: true },
+      orderBy: { data: "desc" },
+    });
+  },
+  ["todos-eventos"],
+  { revalidate: 30 }
+);

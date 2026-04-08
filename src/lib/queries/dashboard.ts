@@ -1,6 +1,7 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
-export const buscarMetricasDashboard = async () => {
+export const buscarMetricasDashboard = unstable_cache(async () => {
   const agora = new Date();
   const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
 
@@ -32,9 +33,9 @@ export const buscarMetricasDashboard = async () => {
     aniversariantesDoMes,
     importacoesRecentes,
   };
-};
+}, ["dashboard-metricas"], { revalidate: 30 });
 
-export const buscarContatosPorMes = async () => {
+export const buscarContatosPorMes = unstable_cache(async () => {
   const seisMesesAtras = new Date();
   seisMesesAtras.setMonth(seisMesesAtras.getMonth() - 5);
   seisMesesAtras.setDate(1);
@@ -54,4 +55,4 @@ export const buscarContatosPorMes = async () => {
     mes: d.mes,
     total: Number(d.total),
   }));
-};
+}, ["dashboard-contatos-por-mes"], { revalidate: 60 });
