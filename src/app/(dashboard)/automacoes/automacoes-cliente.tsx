@@ -52,6 +52,13 @@ type ResultadoDisparo = {
   custoTotal: number;
 };
 
+type Validacao = {
+  total: number;
+  validos: number;
+  invalidos: number;
+  duplicados: number;
+};
+
 type Evento = { id: string; nome: string };
 type Tag = { id: string; nome: string; cor: string };
 
@@ -374,8 +381,9 @@ export const AutomacoesCliente = () => {
   const [custoUnitario] = useState(0.35);
 
   const [resultado, setResultado] = useState<ResultadoDisparo | null>(null);
+  const [validacao, setValidacao] = useState<Validacao | null>(null);
 
-  const totalDisponivel = origem === "crm" ? contatosCRM.length : totalLinhas;
+  const totalDisponivel = origem === "crm" ? contatosCRM.length : (validacao?.validos ?? totalLinhas);
   const quantidadeNum = parseInt(quantidade, 10);
   const quantidadeValida = !isNaN(quantidadeNum) && quantidadeNum > 0 && quantidadeNum <= totalDisponivel;
   const custoEstimado = quantidadeValida ? parseFloat((quantidadeNum * custoUnitario).toFixed(2)) : 0;
@@ -413,7 +421,29 @@ export const AutomacoesCliente = () => {
   const handleConfirmarCRM = (contatos: ContatoCRM[]) => {
     setContatosCRM(contatos);
     setQuantidade(String(contatos.length));
+    setValidacao({ total: contatos.length, validos: contatos.length, invalidos: 0, duplicados: 0 });
     setEtapa("simulacao");
+  };
+
+  const handleValidarEAvancar = async () => {
+    if (!arquivo) return;
+    setCarregando(true);
+    try {
+      const form = new FormData();
+      form.append("arquivo", arquivo);
+      form.append("mapeamento", JSON.stringify(mapeamento));
+      const resp = await fetch("/api/automacoes/validar", { method: "POST", body: form });
+      const json = await resp.json();
+      if (!json.success) throw new Error(json.error);
+      const v: Validacao = json.data;
+      setValidacao(v);
+      setQuantidade(String(v.validos));
+      setEtapa("simulacao");
+    } catch {
+      toast.error("Erro ao validar base de contatos");
+    } finally {
+      setCarregando(false);
+    }
   };
 
   const handleDisparar = async () => {
@@ -469,6 +499,7 @@ export const AutomacoesCliente = () => {
     setMensagem("");
     setResultado(null);
     setProgresso(0);
+    setValidacao(null);
   };
 
   const temTelefone = Object.values(mapeamento).some((v) => v === "telefone");
@@ -685,7 +716,7 @@ export const AutomacoesCliente = () => {
 
             <div className="flex gap-3">
               <Button variant="outline" onClick={reiniciar}>Cancelar</Button>
-              <Button onClick={() => { setQuantidade(String(totalLinhas)); setEtapa("simulacao"); }} disabled={!temNome || !temTelefone}>
+              <Button onClick={handleValidarEAvancar} disabled={!temNome || !temTelefone || carregando}>
                 Próximo: Configurar Disparo
               </Button>
             </div>
@@ -703,20 +734,24 @@ export const AutomacoesCliente = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div className="bg-blue-50 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-blue-700">{totalDisponivel}</p>
+                    <p className="text-3xl font-bold text-blue-700">{validacao?.total ?? totalDisponivel}</p>
                     <p className="text-sm text-blue-600 mt-1">
-                      {origem === "crm" ? "Contatos selecionados" : "Total importado"}
+                      {origem === "crm" ? "Selecionados" : "Total importado"}
                     </p>
                   </div>
                   <div className="bg-emerald-50 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-emerald-700">{totalDisponivel}</p>
-                    <p className="text-sm text-emerald-600 mt-1">Com telefone</p>
+                    <p className="text-3xl font-bold text-emerald-700">{validacao?.validos ?? totalDisponivel}</p>
+                    <p className="text-sm text-emerald-600 mt-1">Válidos</p>
                   </div>
-                  <div className="bg-gray-50 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-gray-700">{formatarMoeda(custoUnitario)}</p>
-                    <p className="text-sm text-gray-600 mt-1">Custo por mensagem</p>
+                  <div className="bg-red-50 rounded-xl p-4 text-center">
+                    <p className="text-3xl font-bold text-red-700">{validacao?.invalidos ?? 0}</p>
+                    <p className="text-sm text-red-600 mt-1">Sem telefone</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-xl p-4 text-center">
+                    <p className="text-3xl font-bold text-amber-700">{validacao?.duplicados ?? 0}</p>
+                    <p className="text-sm text-amber-600 mt-1">Duplicados</p>
                   </div>
                 </div>
 
