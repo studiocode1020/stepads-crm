@@ -25,7 +25,6 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
         nome: true,
         data: true,
         status: true,
-        orcamento: true,
         _count: { select: { participacoes: true } },
       },
       orderBy: { data: "desc" },
@@ -53,17 +52,13 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
     `.then((r) => Number(r[0]?.count ?? 0)),
   ]);
 
-  // Ticket médio: média de (orcamento / participantes) nos eventos com dados disponíveis
-  const eventosComDados = eventos.filter(
-    (e) => (e.orcamento ?? 0) > 0 && e._count.participacoes > 0
-  );
-  const ticketMedio =
-    eventosComDados.length > 0
-      ? eventosComDados.reduce(
-          (sum, e) => sum + e.orcamento! / e._count.participacoes,
-          0
-        ) / eventosComDados.length
-      : null;
+  // Ticket médio: média do valor_ticket pago por cada participante em seus ingressos
+  const ticketMedioRaw = await prisma.$queryRaw<{ media: number | null }[]>`
+    SELECT AVG("valorTicket") as media
+    FROM event_participations
+    WHERE "valorTicket" IS NOT NULL AND "valorTicket" > 0
+  `.then((r) => r[0]?.media ?? null);
+  const ticketMedio = ticketMedioRaw !== null ? Number(ticketMedioRaw) : null;
 
   return {
     totalContatos,
