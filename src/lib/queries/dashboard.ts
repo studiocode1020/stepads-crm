@@ -7,55 +7,86 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
 
   const [
     totalContatos,
-    totalEventos,
     contatosEsteMes,
     importacoesRecentes,
-    eventoMaisPopular,
-    contatosMultiplosEventos,
+    eventos,
+    proximoEvento,
   ] = await Promise.all([
     prisma.contact.count(),
-    prisma.event.count(),
     prisma.contact.count({ where: { criadoEm: { gte: inicioMes } } }),
     prisma.importLog.findMany({
       include: { event: { select: { nome: true } } },
       orderBy: { criadoEm: "desc" },
       take: 5,
     }),
-    prisma.event.findFirst({
-      include: { _count: { select: { participacoes: true } } },
-      orderBy: { participacoes: { _count: "desc" } },
+    prisma.event.findMany({
+      select: {
+        id: true,
+        nome: true,
+        data: true,
+        status: true,
+        orcamento: true,
+        _count: { select: { participacoes: true } },
+      },
+      orderBy: { data: "desc" },
     }),
-    prisma.contact.count({
-      where: { participacoes: { some: {} } },
+    prisma.event.findFirst({
+      where: {
+        data: { gte: agora },
+        status: { notIn: ["cancelado", "realizado"] },
+      },
+      orderBy: { data: "asc" },
+      select: { id: true, nome: true, data: true, status: true },
     }),
   ]);
 
-  const aniversariantesDoMes = await prisma.$queryRaw<{ count: bigint }[]>`
-    SELECT COUNT(*) as count FROM contacts
-    WHERE EXTRACT(MONTH FROM "dataNascimento") = ${agora.getMonth() + 1}
-  `.then((r) => Number(r[0]?.count ?? 0));
+  const [aniversariantesDoMes, clientesRecorrentes] = await Promise.all([
+    prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*) as count FROM contacts
+      WHERE EXTRACT(MONTH FROM "dataNascimento") = ${agora.getMonth() + 1}
+    `.then((r) => Number(r[0]?.count ?? 0)),
+    prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*) as count FROM (
+        SELECT "contactId" FROM event_participations
+        GROUP BY "contactId" HAVING COUNT(*) >= 2
+      ) sub
+    `.then((r) => Number(r[0]?.count ?? 0)),
+  ]);
 
-  const contatosRetornantes = await prisma.$queryRaw<{ count: bigint }[]>`
-    SELECT COUNT(*) as count FROM (
-      SELECT "contactId" FROM event_participations
-      GROUP BY "contactId" HAVING COUNT(*) >= 2
-    ) sub
-  `.then((r) => Number(r[0]?.count ?? 0));
-
-  const taxaRetorno = totalContatos > 0
-    ? Math.round((contatosRetornantes / totalContatos) * 100)
-    : 0;
+  // Ticket médio: média de (orcamento / participantes) nos eventos com dados disponíveis
+  const eventosComDados = eventos.filter(
+    (e) => (e.orcamento ?? 0) > 0 && e._count.participacoes > 0
+  );
+  const ticketMedio =
+    eventosComDados.length > 0
+      ? eventosComDados.reduce(
+          (sum, e) => sum + e.orcamento! / e._count.participacoes,
+          0
+        ) / eventosComDados.length
+      : null;
 
   return {
     totalContatos,
-    totalEventos,
     contatosEsteMes,
     aniversariantesDoMes,
     importacoesRecentes,
-    eventoMaisPopular: eventoMaisPopular
-      ? { nome: eventoMaisPopular.nome, participantes: eventoMaisPopular._count.participacoes }
+    clientesRecorrentes,
+    ticketMedio,
+    proximoEvento: proximoEvento
+      ? {
+          id: proximoEvento.id,
+          nome: proximoEvento.nome,
+          data: proximoEvento.data.toISOString(),
+          status: proximoEvento.status,
+        }
       : null,
-    taxaRetorno,
+    eventos: eventos.map((e) => ({
+      id: e.id,
+      nome: e.nome,
+      data: e.data.toISOString(),
+      status: e.status,
+      participantes: e._count.participacoes,
+    })),
   };
 }, ["dashboard-metricas"], { revalidate: 30 });
 
