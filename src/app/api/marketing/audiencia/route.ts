@@ -14,6 +14,9 @@ export const GET = async (req: NextRequest) => {
   const genero         = searchParams.get("genero")          ?? "";
   const origem         = searchParams.get("origem")          ?? "";
 
+  const limitParam = searchParams.get("limit") ? parseInt(searchParams.get("limit")!, 10) : 200;
+  const limit = Math.min(Math.max(limitParam, 1), 10000); // entre 1 e 10000
+
   const aniversarioMes  = searchParams.get("aniversarioMes") ? parseInt(searchParams.get("aniversarioMes")!, 10) : null;
   const totalEventosMin = searchParams.get("totalEventosMin") ? parseInt(searchParams.get("totalEventosMin")!, 10) : null;
   const totalEventosMax = searchParams.get("totalEventosMax") ? parseInt(searchParams.get("totalEventosMax")!, 10) : null;
@@ -80,7 +83,7 @@ export const GET = async (req: NextRequest) => {
 
   const filterParamsSnapshot = [...filterParams];
 
-  filterParams.push(200);
+  filterParams.push(limit);
   const limitIdx = filterParams.length;
   filterParams.push(0);
   const offsetIdx = filterParams.length;

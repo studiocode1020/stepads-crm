@@ -23,14 +23,24 @@ export const POST = async (req: NextRequest) => {
     const { linhas } = parseArquivo(buffer);
     const contatos = mapearContatos(linhas, mapeamento);
 
-    const resultado = await importarContatos(contatos, eventId ?? undefined);
-
-    // Registrar ImportLog
-    await prisma.importLog.create({
+    // Criar ImportLog primeiro para obter o ID
+    const importLog = await prisma.importLog.create({
       data: {
         nomeArquivo: arquivo.name,
         eventId: eventId ?? null,
         totalLinhas: linhas.length,
+        novosContatos: 0,
+        duplicados: 0,
+        erros: 0,
+      },
+    });
+
+    const resultado = await importarContatos(contatos, eventId ?? undefined, importLog.id);
+
+    // Atualizar ImportLog com os resultados reais
+    await prisma.importLog.update({
+      where: { id: importLog.id },
+      data: {
         novosContatos: resultado.novosContatos,
         duplicados: resultado.duplicados,
         erros: resultado.erros,

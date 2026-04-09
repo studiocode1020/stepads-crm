@@ -63,11 +63,13 @@ model Contact {
   genero         String?
   estado         String?
   observacoes    String?   @db.Text
+  importLogId    String?
   criadoEm      DateTime  @default(now())
   atualizadoEm  DateTime  @updatedAt
 
   participacoes EventParticipation[]
   tags          ContactTag[]
+  importLog     ImportLog? @relation(fields: [importLogId], references: [id], onDelete: SetNull)
 
   @@map("contacts")
 }
@@ -92,6 +94,7 @@ model EventGroup {
   id           String   @id @default(cuid())
   nome         String   @unique
   descricao    String?  @db.Text
+  ordem        Int      @default(0)
   criadoEm    DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
@@ -112,6 +115,7 @@ model Event {
   descricao    String?  @db.Text
   companyId    String?
   eventGroupId String?
+  ordem        Int      @default(0)
   criadoEm    DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
@@ -169,7 +173,8 @@ model ImportLog {
   erros         Int
   criadoEm     DateTime @default(now())
 
-  event Event? @relation(fields: [eventId], references: [id])
+  event    Event?    @relation(fields: [eventId], references: [id])
+  contatos Contact[]
 
   @@map("import_logs")
 }

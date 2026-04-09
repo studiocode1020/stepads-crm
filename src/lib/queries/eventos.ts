@@ -28,7 +28,7 @@ export const buscarEventos = async ({
         eventGroup: { select: { id: true, nome: true } },
         _count: { select: { participacoes: true } },
       },
-      orderBy: { data: "desc" },
+      orderBy: [{ ordem: "asc" }, { data: "desc" }],
       skip: (pagina - 1) * porPagina,
       take: porPagina,
     }),
@@ -170,7 +170,7 @@ export const buscarGruposEvento = async () => {
         orderBy: { data: "desc" },
       },
     },
-    orderBy: { nome: "asc" },
+    orderBy: [{ ordem: "asc" }, { nome: "asc" }],
   });
 
   const agora = new Date();
@@ -250,6 +250,7 @@ export const buscarGrupoPorId = async (id: string) => {
         status: string;
         totalClientes: number;
         ticketMedio: number;
+        faturamentoTotal: number;
       }[],
       clientes: [] as {
         id: string;
@@ -262,7 +263,7 @@ export const buscarGrupoPorId = async (id: string) => {
   }
 
   type DistRow = { valor: string; total: bigint };
-  type TicketRow = { eventid: string; ticketmedio: number | null };
+  type TicketRow = { eventid: string; ticketmedio: number | null; faturamentototal: number | null };
   type ClienteRow = {
     id: string;
     nome: string;
@@ -302,7 +303,7 @@ export const buscarGrupoPorId = async (id: string) => {
         LIMIT 5
       `,
       prisma.$queryRaw<TicketRow[]>`
-        SELECT ep."eventId" AS eventid, AVG(ep."valorTicket") AS ticketmedio
+        SELECT ep."eventId" AS eventid, AVG(ep."valorTicket") AS ticketmedio, SUM(ep."valorTicket") AS faturamentototal
         FROM event_participations ep
         WHERE ep."eventId" = ANY(${edicaoIds}::text[])
         GROUP BY ep."eventId"
@@ -337,7 +338,10 @@ export const buscarGrupoPorId = async (id: string) => {
     rows.map((r) => ({ valor: r.valor, total: Number(r.total) }));
 
   const ticketMap = new Map(
-    ticketRows.map((r) => [r.eventid, r.ticketmedio ? Number(r.ticketmedio) : 0])
+    ticketRows.map((r) => [r.eventid, {
+      ticketMedio: r.ticketmedio ? Number(r.ticketmedio) : 0,
+      faturamentoTotal: r.faturamentototal ? Number(r.faturamentototal) : 0,
+    }])
   );
 
   const agora = new Date();
@@ -380,7 +384,8 @@ export const buscarGrupoPorId = async (id: string) => {
     data: e.data,
     status: e.status,
     totalClientes: e._count.participacoes,
-    ticketMedio: ticketMap.get(e.id) ?? 0,
+    ticketMedio: ticketMap.get(e.id)?.ticketMedio ?? 0,
+    faturamentoTotal: ticketMap.get(e.id)?.faturamentoTotal ?? 0,
   }));
 
   return {

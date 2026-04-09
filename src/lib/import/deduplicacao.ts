@@ -10,7 +10,8 @@ export type ResultadoImportacao = {
 
 export const importarContatos = async (
   contatos: ContatoImportado[],
-  eventId?: string
+  eventId?: string,
+  importLogId?: string
 ): Promise<ResultadoImportacao> => {
   let novosContatos = 0;
   let duplicados = 0;
@@ -43,6 +44,7 @@ export const importarContatos = async (
             telefone: c.telefone || null,
             dataNascimento: c.dataNascimento || null,
             observacoes: c.observacoes || null,
+            importLogId: importLogId ?? null,
           },
         });
         contatoId = novo.id;

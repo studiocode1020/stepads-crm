@@ -10,6 +10,7 @@ import {
   ArrowLeft, Calendar, Users, TrendingUp, Layers, ChevronRight,
 } from "lucide-react";
 import { GrupoClienteActions } from "./grupo-cliente-actions";
+import { FaturamentoChart } from "./faturamento-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -137,6 +138,16 @@ const DetalheGrupoPage = async ({ params }: { params: Promise<{ id: string }> })
             <DistribuicaoBarras titulo="Origem" dados={distribuicoes.origem} />
             <DistribuicaoBarras titulo="Estado (top 5)" dados={distribuicoes.estado} />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Gráfico de faturamento por edição */}
+      <Card className="shadow-sm mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Faturamento por Edição</CardTitle>
+        </CardHeader>
+        <CardContent className="max-w-sm mx-auto">
+          <FaturamentoChart edicoes={edicoes} />
         </CardContent>
       </Card>
 

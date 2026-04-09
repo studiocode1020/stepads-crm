@@ -150,6 +150,8 @@ export default function MarketingCliente({
   const [carregandoAudiencia, setCarregandoAudiencia] = useState(false);
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VAZIOS);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // quantidade digitada pelo usuário no modo CRM (sem pré-seleção)
+  const [quantidadeEnvio, setQuantidadeEnvio] = useState<string>("");
 
   // ── Planilha ──────────────────────────────────────────────────────────────
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -190,11 +192,12 @@ export default function MarketingCliente({
   }, [contatosParam]);
 
   // ── Busca de audiência com filtros ────────────────────────────────────────
-  const buscarAudiencia = useCallback(async (f: Filtros) => {
+  const buscarAudiencia = useCallback(async (f: Filtros, limit?: number) => {
     setCarregandoAudiencia(true);
     try {
       const p = new URLSearchParams();
       Object.entries(f).forEach(([k, v]) => { if (v) p.set(k, v); });
+      if (limit && limit > 0) p.set("limit", String(limit));
 
       const res = await fetch(`/api/marketing/audiencia?${p.toString()}`);
       const json = await res.json();
@@ -209,6 +212,27 @@ export default function MarketingCliente({
       setCarregandoAudiencia(false);
     }
   }, []);
+
+  // Quando entra na etapa 2 com origem "crm" sem pré-seleção, carrega total da base (preview 200)
+  useEffect(() => {
+    if (etapa !== 2 || origemTipo !== "crm") return;
+    if (contatosPreSel.length > 0) return;
+    buscarAudiencia(FILTROS_VAZIOS);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etapa, origemTipo]);
+
+  // Quando o usuário digita uma quantidade, busca os primeiros N contatos
+  const quantidadeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (origemTipo !== "crm" || contatosPreSel.length > 0) return;
+    const n = parseInt(quantidadeEnvio, 10);
+    if (!quantidadeEnvio || isNaN(n) || n <= 0) return;
+    if (quantidadeDebounceRef.current) clearTimeout(quantidadeDebounceRef.current);
+    quantidadeDebounceRef.current = setTimeout(() => {
+      buscarAudiencia(FILTROS_VAZIOS, n);
+    }, 600);
+    return () => { if (quantidadeDebounceRef.current) clearTimeout(quantidadeDebounceRef.current); };
+  }, [quantidadeEnvio, origemTipo, contatosPreSel.length, buscarAudiencia]);
 
   useEffect(() => {
     if (etapa !== 2 || origemTipo !== "manual") return;
@@ -253,9 +277,11 @@ export default function MarketingCliente({
   };
 
   // ── Audiência final (o que será disparado) ────────────────────────────────
+  // "crm" pode vir com pré-seleção da URL ou carregar toda a base
+  const fontecrm = contatosPreSel.length > 0 ? contatosPreSel : audiencia;
   const audienciaFinal: ContatoPreview[] =
     origemTipo === "crm"
-      ? contatosPreSel.filter((c) => selecionados.has(c.id))
+      ? fontecrm.filter((c) => selecionados.has(c.id))
       : origemTipo === "manual"
       ? audiencia.filter((c) => selecionados.has(c.id))
       : [];
@@ -469,74 +495,113 @@ export default function MarketingCliente({
   // ETAPA 2 — Público
   // ─────────────────────────────────────────────────────────────────────────
   const renderEtapa2 = () => {
-    // ── Origem: CRM com contatos pré-selecionados ─────────────────────────
+    // ── Origem: CRM (pré-selecionados ou base completa) ───────────────────
     if (origemTipo === "crm") {
+      const lista = contatosPreSel.length > 0 ? contatosPreSel : audiencia;
+      const totalLabel = contatosPreSel.length > 0
+        ? `${lista.length} clientes recebidos da aba Clientes`
+        : totalAudiencia > 0
+          ? `${totalAudiencia.toLocaleString("pt-BR")} clientes na base do CRM${totalAudiencia > 200 ? " (exibindo 200)" : ""}`
+          : "Carregando base do CRM…";
+
       return (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-gray-700">
-              {contatosPreSel.length} clientes recebidos da aba Clientes
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline" size="sm"
-                onClick={() => setSelecionados(new Set(contatosPreSel.map((c) => c.id)))}
-              >
-                Selecionar todos
-              </Button>
-              <Button
-                variant="outline" size="sm"
-                onClick={() => setSelecionados(new Set())}
-              >
-                Desmarcar todos
-              </Button>
+          {carregandoAudiencia ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Carregando base do CRM…
             </div>
-          </div>
-
-          <div className="rounded-lg border overflow-hidden">
-            <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500">CONTATO</span>
-              <span className="text-xs font-medium text-gray-500">{selecionados.size} selecionados</span>
-            </div>
-            <div className="divide-y max-h-72 overflow-y-auto">
-              {contatosPreSel.map((c) => (
-                <div
-                  key={c.id}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors",
-                    selecionados.has(c.id) && "bg-primary/5"
-                  )}
-                  onClick={() => toggleSelecionado(c.id)}
-                >
-                  <div className={cn(
-                    "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors",
-                    selecionados.has(c.id)
-                      ? "border-primary bg-primary"
-                      : "border-gray-300"
-                  )}>
-                    {selecionados.has(c.id) && <Check className="w-2.5 h-2.5 text-white" />}
+          ) : (
+            <>
+              {/* Contador da base + input de quantidade */}
+              <div className="bg-gray-50 border rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" />
+                  <p className="text-sm font-semibold text-gray-800">
+                    {totalAudiencia > 0
+                      ? <>{totalAudiencia.toLocaleString("pt-BR")} contatos na base do CRM</>
+                      : "Carregando base…"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs text-gray-600">
+                      Para quantos contatos deseja enviar?
+                      <span className="text-muted-foreground ml-1">(os primeiros da lista, de cima para baixo)</span>
+                    </Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={totalAudiencia}
+                      placeholder={`Máx. ${totalAudiencia.toLocaleString("pt-BR")}`}
+                      value={quantidadeEnvio}
+                      onChange={(e) => setQuantidadeEnvio(e.target.value)}
+                      className="max-w-xs bg-white"
+                    />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{c.nome}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {c.telefone ?? c.email ?? "—"}
-                    </p>
-                  </div>
-                  {!c.telefone && (
-                    <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
-                      Sem telefone
-                    </Badge>
+                  {carregandoAudiencia && (
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground mt-5" />
                   )}
                 </div>
-              ))}
-            </div>
-          </div>
+                {selecionados.size > 0 && (
+                  <p className="text-xs text-primary font-medium">
+                    {selecionados.size.toLocaleString("pt-BR")} contatos selecionados para envio
+                  </p>
+                )}
+              </div>
 
-          {selecionados.size === 0 && (
-            <p className="text-xs text-amber-600 flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5" />
-              Selecione ao menos um contato para continuar
-            </p>
+              {/* Preview da lista */}
+              {lista.length > 0 && (
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500">
+                      PRÉVIA {lista.length < (parseInt(quantidadeEnvio) || totalAudiencia) ? `(${lista.length} exibidos)` : ""}
+                    </span>
+                    <span className="text-xs font-medium text-gray-500">{selecionados.size} selecionados</span>
+                  </div>
+                  <div className="divide-y max-h-72 overflow-y-auto">
+                    {lista.map((c) => (
+                      <div
+                        key={c.id}
+                        className={cn(
+                          "flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors",
+                          selecionados.has(c.id) && "bg-primary/5"
+                        )}
+                        onClick={() => toggleSelecionado(c.id)}
+                      >
+                        <div className={cn(
+                          "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors",
+                          selecionados.has(c.id)
+                            ? "border-primary bg-primary"
+                            : "border-gray-300"
+                        )}>
+                          {selecionados.has(c.id) && <Check className="w-2.5 h-2.5 text-white" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{c.nome}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {c.telefone ?? c.email ?? "—"}
+                            {c.estado ? ` · ${c.estado}` : ""}
+                          </p>
+                        </div>
+                        {!c.telefone && (
+                          <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                            Sem telefone
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selecionados.size === 0 && !carregandoAudiencia && (
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Informe a quantidade ou aguarde o carregamento da base
+                </p>
+              )}
+            </>
           )}
         </div>
       );
@@ -660,7 +725,9 @@ export default function MarketingCliente({
                 onValueChange={(v) => setF("eventoGrupoId", v === "todos" ? "" : (v ?? ""))}
               >
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Todos os grupos" />
+                  <SelectValue placeholder="Todos os grupos">
+                    {(v: string) => (!v || v === "todos") ? "Todos os grupos" : (grupos.find(g => g.id === v)?.nome ?? v)}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os grupos</SelectItem>
@@ -679,7 +746,9 @@ export default function MarketingCliente({
                 onValueChange={(v) => setF("eventoId", v === "todos" ? "" : (v ?? ""))}
               >
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Todas as edições" />
+                  <SelectValue placeholder="Todas as edições">
+                    {(v: string) => (!v || v === "todos") ? "Todas as edições" : (eventos.find(e => e.id === v)?.nome ?? v)}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todas as edições</SelectItem>
@@ -698,7 +767,9 @@ export default function MarketingCliente({
                 onValueChange={(v) => setF("aniversarioMes", v === "todos" ? "" : (v ?? ""))}
               >
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Qualquer mês" />
+                  <SelectValue placeholder="Qualquer mês">
+                    {(v: string) => (!v || v === "todos") ? "Qualquer mês" : (MESES.find(m => m.value === v)?.label ?? v)}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Qualquer mês</SelectItem>
@@ -717,7 +788,9 @@ export default function MarketingCliente({
                 onValueChange={(v) => setF("estado", v === "todos" ? "" : (v ?? ""))}
               >
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Todos os estados" />
+                  <SelectValue placeholder="Todos os estados">
+                    {(v: string) => (!v || v === "todos") ? "Todos os estados" : v}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
@@ -736,7 +809,9 @@ export default function MarketingCliente({
                 onValueChange={(v) => setF("genero", v === "todos" ? "" : (v ?? ""))}
               >
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Todos" />
+                  <SelectValue placeholder="Todos">
+                    {(v: string) => (!v || v === "todos") ? "Todos" : v}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
@@ -755,7 +830,9 @@ export default function MarketingCliente({
                 onValueChange={(v) => setF("origem", v === "todos" ? "" : (v ?? ""))}
               >
                 <SelectTrigger className="h-9 bg-white">
-                  <SelectValue placeholder="Todas" />
+                  <SelectValue placeholder="Todas">
+                    {(v: string) => (!v || v === "todos") ? "Todas" : v}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todas</SelectItem>
@@ -802,15 +879,24 @@ export default function MarketingCliente({
 
             {/* Total de eventos */}
             <div className="space-y-1.5">
-              <Label className="text-xs">Qtd de eventos</Label>
+              <Label className="text-xs">
+                Qtd de eventos
+                <span className="ml-1 text-muted-foreground font-normal">(1 – {eventos.length})</span>
+              </Label>
               <div className="flex gap-1.5">
                 <Input
-                  className="h-9 bg-white" placeholder="Mín"
+                  type="number"
+                  min={1}
+                  max={eventos.length}
+                  className="h-9 bg-white" placeholder="Mín (1)"
                   value={filtros.totalEventosMin}
                   onChange={(e) => setF("totalEventosMin", e.target.value)}
                 />
                 <Input
-                  className="h-9 bg-white" placeholder="Máx"
+                  type="number"
+                  min={1}
+                  max={eventos.length}
+                  className="h-9 bg-white" placeholder={`Máx (${eventos.length})`}
                   value={filtros.totalEventosMax}
                   onChange={(e) => setF("totalEventosMax", e.target.value)}
                 />

@@ -12,6 +12,7 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
     eventos,
     proximoEvento,
     eventoMaisPopular,
+    faturamentoPorEventoRaw,
   ] = await Promise.all([
     prisma.contact.count(),
     prisma.contact.count({ where: { criadoEm: { gte: inicioMes } } }),
@@ -42,6 +43,14 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
       include: { _count: { select: { participacoes: true } } },
       orderBy: { participacoes: { _count: "desc" } },
     }),
+    prisma.$queryRaw<{ eventid: string; nome: string; faturamentototal: number }[]>`
+      SELECT ep."eventId" AS eventid, e.nome, SUM(ep."valorTicket") AS faturamentototal
+      FROM event_participations ep
+      JOIN events e ON e.id = ep."eventId"
+      WHERE ep."valorTicket" IS NOT NULL AND ep."valorTicket" > 0
+      GROUP BY ep."eventId", e.nome
+      ORDER BY faturamentototal DESC
+    `,
   ]);
 
   const [aniversariantesDoMes, clientesRecorrentes] = await Promise.all([
@@ -65,6 +74,12 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
   `.then((r) => r[0]?.media ?? null);
   const ticketMedio = ticketMedioRaw !== null ? Number(ticketMedioRaw) : null;
 
+  const faturamentoPorEvento = faturamentoPorEventoRaw.map((r) => ({
+    id: r.eventid,
+    nome: r.nome,
+    faturamentoTotal: Number(r.faturamentototal),
+  }));
+
   return {
     totalContatos,
     contatosEsteMes,
@@ -72,6 +87,7 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
     importacoesRecentes,
     clientesRecorrentes,
     ticketMedio,
+    faturamentoPorEvento,
     proximoEvento: proximoEvento
       ? {
           id: proximoEvento.id,

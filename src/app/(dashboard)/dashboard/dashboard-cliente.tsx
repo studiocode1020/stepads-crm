@@ -4,12 +4,11 @@ import Link from "next/link";
 import {
   Users, Calendar, TrendingUp, Zap, FileUp, ArrowUpRight, Repeat2, DollarSign, Cake, Trophy,
 } from "lucide-react";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatarData, formatarDataHora } from "@/lib/utils";
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from "recharts";
+import { FaturamentoChart } from "../eventos/grupo/[id]/faturamento-chart";
 
 // ---------- Types ----------
 
@@ -36,6 +35,7 @@ type Metricas = {
   }[];
   clientesRecorrentes: number;
   ticketMedio: number | null;
+  faturamentoPorEvento: { id: string; nome: string; faturamentoTotal: number }[];
   proximoEvento: { id: string; nome: string; data: string; status: string } | null;
   eventoMaisPopular: { id: string; nome: string; participantes: number } | null;
   eventos: EventoCard[];
@@ -44,13 +44,6 @@ type Metricas = {
 type ContatosMes = { mes: string; total: number };
 
 // ---------- Helpers ----------
-
-const MESES_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
-const formatarMes = (mes: string) => {
-  const [, m] = mes.split("-");
-  return MESES_PT[Number(m) - 1] ?? mes;
-};
 
 const formatarMoeda = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -90,16 +83,11 @@ const sortEventos = (eventos: EventoCard[]) => {
 
 export const DashboardCliente = ({
   metricas,
-  contatosPorMes,
+  contatosPorMes: _contatosPorMes,
 }: {
   metricas: Metricas;
   contatosPorMes: ContatosMes[];
 }) => {
-  const dadosGrafico = contatosPorMes.map((d) => ({
-    mes: formatarMes(d.mes),
-    contatos: d.total,
-  }));
-
   const eventosOrdenados = sortEventos(metricas.eventos);
   const agora = new Date();
 
@@ -352,49 +340,34 @@ export const DashboardCliente = ({
       {/* ── Seção secundária ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-        {/* Gráfico de crescimento */}
+        {/* Gráfico de faturamento por evento */}
         <Card className="xl:col-span-2 shadow-sm">
           <CardHeader>
             <div className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-primary" />
-              <CardTitle className="text-base">Crescimento da Base</CardTitle>
+              <CardTitle className="text-base">Faturamento por Evento</CardTitle>
             </div>
-            <CardDescription>Novos contatos nos últimos 12 meses</CardDescription>
+            <CardDescription>Receita acumulada de cada evento</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={dadosGrafico} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gradContatos" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#534AB7" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#534AB7" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="mes" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
-                  formatter={(v) => [v, "Contatos"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="contatos"
-                  stroke="#534AB7"
-                  strokeWidth={2.5}
-                  fill="url(#gradContatos)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <FaturamentoChart edicoes={metricas.faturamentoPorEvento} horizontal />
           </CardContent>
         </Card>
 
         {/* Importações recentes */}
         <Card className="shadow-sm">
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <FileUp className="w-5 h-5 text-primary" />
-              <CardTitle className="text-base">Importações Recentes</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <FileUp className="w-5 h-5 text-primary" />
+                <CardTitle className="text-base">Importações Recentes</CardTitle>
+              </div>
+              <Link
+                href="/importacoes"
+                className="text-xs text-primary hover:underline flex items-center gap-0.5 flex-shrink-0"
+              >
+                Ver todas <ArrowUpRight className="w-3 h-3" />
+              </Link>
             </div>
             <CardDescription>Últimas planilhas processadas</CardDescription>
           </CardHeader>
