@@ -125,7 +125,7 @@ export const ContatosCliente = ({
 
   const enviarParaMarketing = () => {
     const ids = Array.from(selecionados).join(",");
-    router.push(`/automacoes?contatos=${ids}`);
+    router.push(`/marketing?contatos=${ids}&origem=clientes`);
   };
 
   const handleDeletar = async () => {
