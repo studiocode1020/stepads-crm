@@ -4,11 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Search, Plus, Download, Filter, Trash2, Eye, Phone, Mail } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Search, Download, Filter, Trash2, Eye, Users, TrendingUp,
+  DollarSign, BarChart2, CheckSquare, Square, Send, ChevronDown, ChevronUp, X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -18,56 +21,111 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { formatarData } from "@/lib/utils";
-import { DialogNovoContato } from "./dialog-novo-contato";
+import type { ClienteConsolidado } from "@/lib/queries/contatos";
 
-type Contato = {
-  id: string;
-  nome: string;
-  email: string | null;
-  telefone: string | null;
-  dataNascimento: Date | null;
-  criadoEm: Date;
-  participacoes: { event: { id: string; nome: string; data: Date } }[];
-  tags: { tag: { id: string; nome: string; cor: string } }[];
+type Metricas = {
+  totalContatos: number;
+  ticketMedio: number | null;
+  mediaGasto: number | null;
+  mediaEventos: number | null;
+};
+
+type FiltrosIniciais = {
+  busca: string;
+  aniversarioMes?: number;
+  totalEventosMin?: number;
+  totalEventosMax?: number;
+  origem: string;
+  ticketMin?: number;
+  ticketMax?: number;
+  eventoId: string;
 };
 
 type Props = {
-  contatos: Contato[];
+  clientes: ClienteConsolidado[];
   total: number;
   paginas: number;
   paginaAtual: number;
-  buscaInicial: string;
-  eventoIdInicial: string;
-  tagIdInicial: string;
-  eventos: { id: string; nome: string; data: Date }[];
-  tags: { id: string; nome: string; cor: string }[];
+  metricas: Metricas;
+  origens: string[];
+  eventos: { id: string; nome: string; data: Date | string }[];
+  filtrosIniciais: FiltrosIniciais;
 };
 
+const MESES = [
+  "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+  "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
+];
+
 export const ContatosCliente = ({
-  contatos, total, paginas, paginaAtual, buscaInicial,
-  eventoIdInicial, tagIdInicial, eventos, tags,
+  clientes, total, paginas, paginaAtual, metricas, origens, eventos, filtrosIniciais,
 }: Props) => {
   const router = useRouter();
   const pathname = usePathname();
   const [, startTransition] = useTransition();
-  const [busca, setBusca] = useState(buscaInicial);
-  const [eventoId, setEventoId] = useState(eventoIdInicial);
-  const [tagId, setTagId] = useState(tagIdInicial);
-  const [deletandoId, setDeletandoId] = useState<string | null>(null);
-  const [dialogAberto, setDialogAberto] = useState(false);
 
-  const atualizarFiltros = (novaBusca: string, novoEvento: string, novaTag: string, pagina = 1) => {
+  // Filtros
+  const [busca, setBusca] = useState(filtrosIniciais.busca);
+  const [aniversarioMes, setAniversarioMes] = useState(filtrosIniciais.aniversarioMes?.toString() ?? "");
+  const [totalEventosMin, setTotalEventosMin] = useState(filtrosIniciais.totalEventosMin?.toString() ?? "");
+  const [totalEventosMax, setTotalEventosMax] = useState(filtrosIniciais.totalEventosMax?.toString() ?? "");
+  const [origem, setOrigem] = useState(filtrosIniciais.origem);
+  const [ticketMin, setTicketMin] = useState(filtrosIniciais.ticketMin?.toString() ?? "");
+  const [ticketMax, setTicketMax] = useState(filtrosIniciais.ticketMax?.toString() ?? "");
+  const [eventoId, setEventoId] = useState(filtrosIniciais.eventoId);
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+
+  // Seleção
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+
+  // Deleção
+  const [deletandoId, setDeletandoId] = useState<string | null>(null);
+
+  const aplicarFiltros = (pg = 1) => {
     const params = new URLSearchParams();
-    if (novaBusca) params.set("busca", novaBusca);
-    if (novoEvento) params.set("eventoId", novoEvento);
-    if (novaTag) params.set("tagId", novaTag);
-    if (pagina > 1) params.set("pagina", String(pagina));
+    if (busca) params.set("busca", busca);
+    if (aniversarioMes) params.set("aniversarioMes", aniversarioMes);
+    if (totalEventosMin) params.set("totalEventosMin", totalEventosMin);
+    if (totalEventosMax) params.set("totalEventosMax", totalEventosMax);
+    if (origem) params.set("origem", origem);
+    if (ticketMin) params.set("ticketMin", ticketMin);
+    if (ticketMax) params.set("ticketMax", ticketMax);
+    if (eventoId) params.set("eventoId", eventoId);
+    if (pg > 1) params.set("pagina", String(pg));
     startTransition(() => router.push(`${pathname}?${params.toString()}`));
   };
 
-  const handleBusca = (e: React.FormEvent) => {
-    e.preventDefault();
-    atualizarFiltros(busca, eventoId, tagId);
+  const limparFiltros = () => {
+    setBusca("");
+    setAniversarioMes("");
+    setTotalEventosMin("");
+    setTotalEventosMax("");
+    setOrigem("");
+    setTicketMin("");
+    setTicketMax("");
+    setEventoId("");
+    startTransition(() => router.push(pathname));
+  };
+
+  const toggleSelecionado = (id: string) => {
+    setSelecionados((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleTodos = () => {
+    if (selecionados.size === clientes.length && clientes.length > 0) {
+      setSelecionados(new Set());
+    } else {
+      setSelecionados(new Set(clientes.map((c) => c.id)));
+    }
+  };
+
+  const enviarParaMarketing = () => {
+    const ids = Array.from(selecionados).join(",");
+    router.push(`/automacoes?contatos=${ids}`);
   };
 
   const handleDeletar = async () => {
@@ -90,157 +148,416 @@ export const ContatosCliente = ({
     window.open(`/api/contatos/exportar?${params.toString()}`, "_blank");
   };
 
+  const temFiltrosAtivos =
+    busca || aniversarioMes || totalEventosMin || totalEventosMax ||
+    origem || ticketMin || ticketMax || eventoId;
+
+  const moeda = (v: number) =>
+    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
   return (
     <>
-      <div className="space-y-4">
-        {/* Filtros */}
-        <div className="bg-white rounded-xl border p-4 shadow-sm">
-          <form onSubmit={handleBusca} className="flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      {/* ── Bloco 1 — Resumo da base ─────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Card className="shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Users className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">
+                {metricas.totalContatos.toLocaleString("pt-BR")}
+              </p>
+              <p className="text-xs text-muted-foreground">Clientes únicos</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">
+                {metricas.ticketMedio != null ? moeda(metricas.ticketMedio) : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">Ticket médio</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 bg-violet-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <DollarSign className="w-5 h-5 text-violet-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">
+                {metricas.mediaGasto != null ? moeda(metricas.mediaGasto) : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">Média gasto / cliente</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <BarChart2 className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">
+                {metricas.mediaEventos != null ? Number(metricas.mediaEventos).toFixed(1) : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">Média de eventos</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Bloco 2 — Filtros ────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border p-4 shadow-sm mb-4">
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex-1 min-w-[200px] relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome, e-mail ou telefone..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && aplicarFiltros()}
+              className="pl-9"
+            />
+          </div>
+
+          <Button
+            variant="outline"
+            onClick={() => setFiltrosAbertos((v) => !v)}
+            className="gap-2"
+          >
+            <Filter className="w-4 h-4" />
+            Filtros
+            {temFiltrosAtivos && <span className="w-2 h-2 rounded-full bg-primary" />}
+            {filtrosAbertos ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </Button>
+
+          <Button onClick={() => aplicarFiltros()}>Buscar</Button>
+
+          {temFiltrosAtivos && (
+            <Button variant="ghost" onClick={limparFiltros} className="gap-1 text-muted-foreground">
+              <X className="w-4 h-4" />
+              Limpar filtros
+            </Button>
+          )}
+
+          <div className="ml-auto flex gap-2">
+            <Button variant="outline" onClick={exportar}>
+              <Download className="w-4 h-4 mr-2" />
+              Exportar
+            </Button>
+          </div>
+        </div>
+
+        {filtrosAbertos && (
+          <div className="mt-4 pt-4 border-t grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Aniversário */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                Mês de aniversário
+              </label>
+              <Select
+                value={aniversarioMes || "todos"}
+                onValueChange={(v) => setAniversarioMes(v === "todos" ? "" : (v ?? ""))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os meses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os meses</SelectItem>
+                  {MESES.map((m, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Total de eventos */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                Total de eventos
+              </label>
+              <div className="flex gap-2 items-center">
                 <Input
-                  placeholder="Buscar por nome, e-mail ou telefone..."
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  className="pl-9"
+                  type="number"
+                  placeholder="Mín"
+                  value={totalEventosMin}
+                  onChange={(e) => setTotalEventosMin(e.target.value)}
+                  min={0}
+                  className="w-20"
+                />
+                <span className="text-muted-foreground text-sm">–</span>
+                <Input
+                  type="number"
+                  placeholder="Máx"
+                  value={totalEventosMax}
+                  onChange={(e) => setTotalEventosMax(e.target.value)}
+                  min={0}
+                  className="w-20"
                 />
               </div>
             </div>
 
-            <Select value={eventoId || "todos"} onValueChange={(v) => {
-              const val = (v === "todos" || v === null) ? "" : v;
-              setEventoId(val);
-              atualizarFiltros(busca, val, tagId);
-            }}>
-              <SelectTrigger className="w-[200px]">
-                <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Filtrar por evento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os eventos</SelectItem>
-                {eventos.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={tagId || "todas"} onValueChange={(v) => {
-              const val = (v === "todas" || v === null) ? "" : v;
-              setTagId(val);
-              atualizarFiltros(busca, eventoId, val);
-            }}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Tag" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas as tags</SelectItem>
-                {tags.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button type="submit">Buscar</Button>
-
-            <div className="flex gap-2 ml-auto">
-              <Button variant="outline" type="button" onClick={exportar}>
-                <Download className="w-4 h-4 mr-2" />
-                Exportar CSV
-              </Button>
-              <Button type="button" onClick={() => setDialogAberto(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Contato
-              </Button>
+            {/* Origem */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                Origem
+              </label>
+              <Select
+                value={origem || "todas"}
+                onValueChange={(v) => setOrigem(v === "todas" ? "" : (v ?? ""))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as origens" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as origens</SelectItem>
+                  {origens.map((o) => (
+                    <SelectItem key={o} value={o}>{o}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </form>
-        </div>
 
-        {/* Tabela */}
-        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+            {/* Faixa de ticket médio */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                Ticket médio (R$)
+              </label>
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="number"
+                  placeholder="Mín"
+                  value={ticketMin}
+                  onChange={(e) => setTicketMin(e.target.value)}
+                  min={0}
+                  className="w-24"
+                />
+                <span className="text-muted-foreground text-sm">–</span>
+                <Input
+                  type="number"
+                  placeholder="Máx"
+                  value={ticketMax}
+                  onChange={(e) => setTicketMax(e.target.value)}
+                  min={0}
+                  className="w-24"
+                />
+              </div>
+            </div>
+
+            {/* Evento */}
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                Participou do evento
+              </label>
+              <Select
+                value={eventoId || "todos"}
+                onValueChange={(v) => setEventoId(v === "todos" ? "" : (v ?? ""))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os eventos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os eventos</SelectItem>
+                  {eventos.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Barra de seleção para marketing ─────────────────────────── */}
+      {selecionados.size > 0 && (
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-gray-900">
+              {selecionados.size} cliente{selecionados.size !== 1 ? "s" : ""} selecionado{selecionados.size !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelecionados(new Set())}
+            >
+              Cancelar seleção
+            </Button>
+            <Button size="sm" onClick={enviarParaMarketing} className="gap-2">
+              <Send className="w-4 h-4" />
+              Enviar para Marketing
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bloco 3 — Tabela consolidada ─────────────────────────────── */}
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50/80">
+                <TableHead className="w-10">
+                  <button onClick={toggleTodos}>
+                    {selecionados.size === clientes.length && clientes.length > 0
+                      ? <CheckSquare className="w-4 h-4 text-primary" />
+                      : <Square className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                </TableHead>
                 <TableHead className="font-semibold">Nome</TableHead>
-                <TableHead className="font-semibold">Contato</TableHead>
-                <TableHead className="font-semibold">Nascimento</TableHead>
-                <TableHead className="font-semibold">Eventos</TableHead>
-                <TableHead className="font-semibold">Tags</TableHead>
-                <TableHead className="font-semibold">Cadastrado</TableHead>
-                <TableHead className="w-20"></TableHead>
+                <TableHead className="font-semibold">Aniversário</TableHead>
+                <TableHead className="font-semibold">Estado</TableHead>
+                <TableHead className="font-semibold text-right">Total Gasto</TableHead>
+                <TableHead className="font-semibold text-right">Ticket Médio</TableHead>
+                <TableHead className="font-semibold text-center">Eventos</TableHead>
+                <TableHead className="font-semibold">Participações</TableHead>
+                <TableHead className="font-semibold">Última Participação</TableHead>
+                <TableHead className="font-semibold">Origem</TableHead>
+                <TableHead className="w-16"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {contatos.length === 0 && (
+              {clientes.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
-                    Nenhum contato encontrado
+                  <TableCell
+                    colSpan={11}
+                    className="text-center text-muted-foreground py-12"
+                  >
+                    Nenhum cliente encontrado
                   </TableCell>
                 </TableRow>
               )}
-              {contatos.map((c) => (
-                <TableRow key={c.id} className="hover:bg-gray-50/50">
-                  <TableCell>
-                    <Link href={`/contatos/${c.id}`} className="font-medium text-gray-900 hover:text-primary transition-colors">
+              {clientes.map((c) => (
+                <TableRow
+                  key={c.id}
+                  className={`hover:bg-gray-50/50 cursor-pointer select-none ${
+                    selecionados.has(c.id) ? "bg-primary/5" : ""
+                  }`}
+                  onClick={() => toggleSelecionado(c.id)}
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => toggleSelecionado(c.id)}>
+                      {selecionados.has(c.id)
+                        ? <CheckSquare className="w-4 h-4 text-primary" />
+                        : <Square className="w-4 h-4 text-muted-foreground" />}
+                    </button>
+                  </TableCell>
+
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Link
+                      href={`/contatos/${c.id}`}
+                      className="font-medium text-gray-900 hover:text-primary transition-colors whitespace-nowrap"
+                    >
                       {c.nome}
                     </Link>
                   </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      {c.email && (
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <Mail className="w-3 h-3" />
-                          <span>{c.email}</span>
-                        </div>
-                      )}
-                      {c.telefone && (
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <Phone className="w-3 h-3" />
-                          <span>{c.telefone}</span>
-                        </div>
-                      )}
-                    </div>
+
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {c.datanascimento ? formatarData(c.datanascimento) : "—"}
                   </TableCell>
+
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatarData(c.dataNascimento)}
+                    {c.estado ?? "—"}
                   </TableCell>
-                  <TableCell>
-                    {(() => {
-                      const n = c.participacoes.length;
-                      if (n === 0) return <span className="text-xs text-muted-foreground">—</span>;
-                      if (n >= 4) return <Badge className="text-xs bg-violet-600 hover:bg-violet-700">Frequente · {n}x</Badge>;
-                      if (n >= 2) return <Badge className="text-xs bg-emerald-600 hover:bg-emerald-700">Regular · {n}x</Badge>;
-                      return <Badge variant="secondary" className="text-xs">Novo · 1x</Badge>;
-                    })()}
+
+                  <TableCell className="text-sm text-right font-medium whitespace-nowrap">
+                    {c.total_gasto > 0 ? moeda(c.total_gasto) : "—"}
                   </TableCell>
+
+                  <TableCell className="text-sm text-right text-muted-foreground whitespace-nowrap">
+                    {c.ticket_medio > 0 ? moeda(c.ticket_medio) : "—"}
+                  </TableCell>
+
+                  <TableCell className="text-center">
+                    {c.total_eventos > 0 ? (
+                      <Badge
+                        variant="secondary"
+                        className={`text-xs ${
+                          c.total_eventos >= 4
+                            ? "bg-violet-100 text-violet-700"
+                            : c.total_eventos >= 2
+                            ? "bg-emerald-100 text-emerald-700"
+                            : ""
+                        }`}
+                      >
+                        {c.total_eventos}x
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+
                   <TableCell>
-                    <div className="flex gap-1 flex-wrap">
-                      {c.tags.map(({ tag }) => (
-                        <span
-                          key={tag.id}
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white"
-                          style={{ backgroundColor: tag.cor }}
+                    <div className="flex gap-1 flex-wrap max-w-[220px]">
+                      {c.participacoes.slice(0, 2).map((p) => (
+                        <Badge
+                          key={p.id}
+                          variant="outline"
+                          className="text-xs whitespace-nowrap"
                         >
-                          {tag.nome}
-                        </span>
+                          {p.nome}
+                        </Badge>
                       ))}
+                      {c.participacoes.length > 2 && (
+                        <Badge variant="secondary" className="text-xs">
+                          +{c.participacoes.length - 2}
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatarData(c.criadoEm)}
+
+                  <TableCell className="text-sm whitespace-nowrap">
+                    {c.ultima_participacao_nome ? (
+                      <div>
+                        <p
+                          className="text-xs font-medium text-gray-700 truncate max-w-[160px]"
+                          title={c.ultima_participacao_nome}
+                        >
+                          {c.ultima_participacao_nome}
+                        </p>
+                        {c.ultima_participacao_data && (
+                          <p className="text-xs text-muted-foreground">
+                            {formatarData(c.ultima_participacao_data)}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
-                  <TableCell>
+
+                  <TableCell className="text-sm text-muted-foreground">
+                    {c.origem ?? "—"}
+                  </TableCell>
+
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
-                      <Link href={`/contatos/${c.id}`} className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "w-8 h-8")}>
-                        <Eye className="w-4 h-4" />
+                      <Link
+                        href={`/contatos/${c.id}`}
+                        className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
+                      >
+                        <Eye className="w-4 h-4 text-muted-foreground" />
                       </Link>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="w-8 h-8 hover:text-destructive"
+                      <button
+                        className="p-1.5 rounded-md hover:bg-red-50 hover:text-destructive transition-colors"
                         onClick={() => setDeletandoId(c.id)}
                       >
                         <Trash2 className="w-4 h-4" />
-                      </Button>
+                      </button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -248,44 +565,50 @@ export const ContatosCliente = ({
             </TableBody>
           </Table>
         </div>
-
-        {/* Paginação */}
-        {paginas > 1 && (
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>Página {paginaAtual} de {paginas} ({total.toLocaleString("pt-BR")} contatos)</span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline" size="sm"
-                disabled={paginaAtual <= 1}
-                onClick={() => atualizarFiltros(busca, eventoId, tagId, paginaAtual - 1)}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline" size="sm"
-                disabled={paginaAtual >= paginas}
-                onClick={() => atualizarFiltros(busca, eventoId, tagId, paginaAtual + 1)}
-              >
-                Próxima
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
 
-      <DialogNovoContato aberto={dialogAberto} onFechar={() => setDialogAberto(false)} />
+      {/* Paginação */}
+      {paginas > 1 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground mt-4">
+          <span>
+            Página {paginaAtual} de {paginas} ({total.toLocaleString("pt-BR")} clientes)
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={paginaAtual <= 1}
+              onClick={() => aplicarFiltros(paginaAtual - 1)}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={paginaAtual >= paginas}
+              onClick={() => aplicarFiltros(paginaAtual + 1)}
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
 
+      {/* Confirmação de deleção */}
       <AlertDialog open={!!deletandoId} onOpenChange={() => setDeletandoId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remover contato?</AlertDialogTitle>
+            <AlertDialogTitle>Remover cliente?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação não pode ser desfeita. O contato será removido junto com seu histórico de eventos.
+              Esta ação não pode ser desfeita. O cliente será removido junto com seu histórico de participações.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeletar} className="bg-destructive hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDeletar}
+              className="bg-destructive hover:bg-destructive/90"
+            >
               Remover
             </AlertDialogAction>
           </AlertDialogFooter>

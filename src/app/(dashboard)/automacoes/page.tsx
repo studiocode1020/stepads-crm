@@ -1,8 +1,14 @@
-import { Badge } from "@/components/ui/badge";
 import { Zap } from "lucide-react";
 import { AutomacoesCliente } from "./automacoes-cliente";
 
-const AutomacoesPage = () => {
+const AutomacoesPage = async ({
+  searchParams,
+}: {
+  searchParams: Promise<{ contatos?: string }>;
+}) => {
+  const params = await searchParams;
+  const contatosPreSelecionados = params.contatos ?? "";
+
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -11,14 +17,13 @@ const AutomacoesPage = () => {
             <Zap className="w-5 h-5 text-primary" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Automações</h1>
-          <Badge className="bg-emerald-100 text-emerald-800 border-0 font-medium">WhatsApp</Badge>
         </div>
         <p className="text-muted-foreground">
-          Importe uma base de contatos, simule o custo e dispare mensagens via WhatsApp.
+          Configure regras contínuas de comunicação que rodam automaticamente para você.
         </p>
       </div>
 
-      <AutomacoesCliente />
+      <AutomacoesCliente contatosPreSelecionados={contatosPreSelecionados} />
     </div>
   );
 };

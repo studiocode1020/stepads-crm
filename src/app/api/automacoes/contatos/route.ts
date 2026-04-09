@@ -11,6 +11,19 @@ export const GET = async (req: NextRequest) => {
     const tagId = searchParams.get("tagId") ?? "";
     const eventoId = searchParams.get("eventoId") ?? "";
 
+    const ids = searchParams.get("ids") ?? "";
+
+    // Se IDs explícitos foram fornecidos (vindo da seleção de Clientes)
+    if (ids) {
+      const idList = ids.split(",").filter(Boolean);
+      const contatos = await prisma.contact.findMany({
+        where: { id: { in: idList }, telefone: { not: null } },
+        select: { id: true, nome: true, telefone: true, email: true },
+        orderBy: { nome: "asc" },
+      });
+      return NextResponse.json({ success: true, data: contatos });
+    }
+
     const where: Record<string, unknown> = {
       telefone: { not: null },
     };

@@ -1,862 +1,613 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
-  Upload, FileSpreadsheet, ArrowRight, CheckCircle, AlertCircle,
-  RefreshCw, Send, History, MessageSquare, DollarSign, Users, XCircle,
-  Database, Search, CheckSquare, Square,
+  Cake, Newspaper, RefreshCw, CalendarCheck,
+  Play, Pause, Save, ArrowLeft, Zap, Users,
+  MessageSquare, Settings, ChevronRight, Clock,
+  CheckCircle2, Circle, AlertCircle, Smartphone, Mail,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
-// ---------- Types ----------
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type Origem = "planilha" | "crm";
-type Etapa = "upload" | "mapeamento" | "simulacao" | "disparando" | "resultado";
+type Canal = "whatsapp" | "email";
+type Status = "ativa" | "pausada" | "rascunho";
 
-type ContatoCRM = {
+type AutomacaoModelo = {
   id: string;
   nome: string;
-  telefone: string;
-  email: string | null;
+  descricao: string;
+  Icone: React.ElementType;
+  cor: "rose" | "blue" | "amber" | "emerald";
+  gatilho: string;
+  condicao: string;
+  ofertaPadrao: string;
+  canais: Canal[];
+  eventoVinculado: boolean;
+  audiencia: {
+    totalMock: number;
+    descricao: string;
+    exemplos: string[];
+    porqueElegiveis: string;
+  };
+  mensagemWhatsappPadrao: string;
+  mensagemEmailAssuntoPadrao?: string;
+  mensagemEmailCorpoPadrao?: string;
 };
 
-type Campanha = {
-  id: string;
-  nome: string;
-  status: string;
-  totalContatos: number;
-  enviados: number;
-  falhas: number;
-  custoUnitario: number;
-  custoTotal: number;
-  criadoEm: string;
-  mensagem: string;
+type AutomacaoInstancia = {
+  status: Status;
+  oferta: string;
+  eventoVinculadoNome: string;
+  mensagemWhatsapp: string;
+  mensagemEmailAssunto: string;
+  mensagemEmailCorpo: string;
 };
 
-type ResultadoDisparo = {
-  campanhaId: string;
-  totalContatos: number;
-  enviados: number;
-  falhas: number;
-  custoTotal: number;
-};
+// ─── Dados mockados das automações ───────────────────────────────────────────
 
-type Validacao = {
-  total: number;
-  validos: number;
-  invalidos: number;
-  duplicados: number;
-};
-
-type Evento = { id: string; nome: string };
-type Tag = { id: string; nome: string; cor: string };
-
-const CAMPOS_SISTEMA = [
-  { value: "", label: "— Ignorar coluna —" },
-  { value: "nome", label: "Nome" },
-  { value: "telefone", label: "Telefone" },
-  { value: "email", label: "E-mail" },
-  { value: "dataNascimento", label: "Data de Nascimento" },
-  { value: "observacoes", label: "Observações" },
+const MODELOS: AutomacaoModelo[] = [
+  {
+    id: "aniversariante-mes",
+    nome: "Aniversariante do Mês",
+    descricao: "Envia uma mensagem especial para clientes que fazem aniversário no mês corrente.",
+    Icone: Cake,
+    cor: "rose",
+    gatilho: "Data de aniversário do cliente",
+    condicao: "Aniversário no mês corrente",
+    ofertaPadrao: "Desconto ou mensagem personalizada de aniversário",
+    canais: ["whatsapp"],
+    eventoVinculado: false,
+    audiencia: {
+      totalMock: 14,
+      descricao: "Clientes com aniversário neste mês",
+      exemplos: ["Ana Lima", "Carlos Mendes", "Beatriz Souza", "João Ferreira"],
+      porqueElegiveis: "Possuem data de nascimento cadastrada com mês igual ao mês atual",
+    },
+    mensagemWhatsappPadrao:
+      "🎂 Olá, {nome}!\n\nA equipe quer te desejar um Feliz Aniversário! 🎉\n\nComo presente especial, temos uma condição exclusiva esperando por você no próximo evento.\n\nAproveite e entre em contato com a gente!",
+  },
+  {
+    id: "newsletter-mensal",
+    nome: "Newsletter Mensal",
+    descricao: "Envia um resumo de novidades e próximos eventos para toda a base ativa.",
+    Icone: Newspaper,
+    cor: "blue",
+    gatilho: "Dia 1 de cada mês",
+    condicao: "Participou de pelo menos 1 evento nos últimos 12 meses",
+    ofertaPadrao: "Novidades e programação de eventos do mês",
+    canais: ["whatsapp", "email"],
+    eventoVinculado: false,
+    audiencia: {
+      totalMock: 312,
+      descricao: "Base ativa — participou de evento nos últimos 12 meses",
+      exemplos: ["Mariana Costa", "Pedro Alves", "Fernanda Rocha", "Lucas Nunes"],
+      porqueElegiveis: "Participaram de pelo menos um evento nos últimos 12 meses",
+    },
+    mensagemWhatsappPadrao:
+      "Olá, {nome}! 👋\n\nA programação do mês chegou!\n\nConfira os próximos eventos e garanta sua vaga com condições especiais para quem já é da família.\n\nAcesse: [link do evento]",
+    mensagemEmailAssuntoPadrao: "🗓️ Programação do mês — confira o que vem por aí",
+    mensagemEmailCorpoPadrao:
+      "Olá, {nome}!\n\nO mês começou e com ele vem uma programação incrível.\n\nConfira abaixo os próximos eventos e garanta sua vaga com condições exclusivas para você.\n\n[Inserir programação aqui]\n\nAté breve!\nEquipe",
+  },
+  {
+    id: "reativacao-inativos",
+    nome: "Reativação de Inativos",
+    descricao: "Alcança clientes que não participam de eventos há mais de 6 meses.",
+    Icone: RefreshCw,
+    cor: "amber",
+    gatilho: "6 meses sem participação em evento",
+    condicao: "Última participação há mais de 180 dias",
+    ofertaPadrao: "Condição especial de retorno — oferta exclusiva",
+    canais: ["whatsapp"],
+    eventoVinculado: false,
+    audiencia: {
+      totalMock: 87,
+      descricao: "Clientes inativos há mais de 6 meses",
+      exemplos: ["Roberto Dias", "Camila Teixeira", "André Gomes", "Patrícia Lemos"],
+      porqueElegiveis: "Não participaram de nenhum evento nos últimos 6 meses",
+    },
+    mensagemWhatsappPadrao:
+      "Olá, {nome}! Sentimos sua falta! 💙\n\nFaz um tempo que não nos vemos por aqui.\n\nTemos eventos incríveis chegando e queremos que você seja um dos primeiros a saber.\n\nQuer conferir? É só responder aqui!",
+  },
+  {
+    id: "pre-evento",
+    nome: "Pré-Evento (Frequentadores)",
+    descricao: "Lembra frequentadores anteriores sobre o próximo evento vinculado.",
+    Icone: CalendarCheck,
+    cor: "emerald",
+    gatilho: "30 dias antes da data do evento vinculado",
+    condicao: "Participou de pelo menos 1 edição anterior deste evento",
+    ofertaPadrao: "Acesso antecipado ou desconto de frequentador",
+    canais: ["whatsapp"],
+    eventoVinculado: true,
+    audiencia: {
+      totalMock: 43,
+      descricao: "Frequentadores de edições anteriores do evento vinculado",
+      exemplos: ["Isabela Martins", "Rafael Carvalho", "Tatiane Oliveira", "Diego Pinto"],
+      porqueElegiveis: "Participaram de pelo menos uma edição anterior do evento vinculado",
+    },
+    mensagemWhatsappPadrao:
+      "Olá, {nome}! 🎊\n\nVocê estava com a gente na última edição e isso significa muito pra gente!\n\nO próximo evento está chegando e você tem acesso antecipado — como frequentador especial.\n\nGarante logo o seu lugar!",
+  },
 ];
 
-const STATUS_LABEL: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  pendente:     { label: "Pendente",     variant: "secondary" },
-  em_andamento: { label: "Em andamento", variant: "default" },
-  concluida:    { label: "Concluída",    variant: "default" },
-  erro:         { label: "Com erros",    variant: "destructive" },
+const COR: Record<AutomacaoModelo["cor"], { bg: string; icon: string; badge: string }> = {
+  rose:    { bg: "bg-rose-50",    icon: "text-rose-600",    badge: "bg-rose-100 text-rose-700" },
+  blue:    { bg: "bg-blue-50",    icon: "text-blue-600",    badge: "bg-blue-100 text-blue-700" },
+  amber:   { bg: "bg-amber-50",   icon: "text-amber-600",   badge: "bg-amber-100 text-amber-700" },
+  emerald: { bg: "bg-emerald-50", icon: "text-emerald-600", badge: "bg-emerald-100 text-emerald-700" },
 };
 
-const formatarMoeda = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-const formatarData = (s: string) =>
-  new Date(s).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-
-// ---------- Histórico ----------
-
-const Historico = () => {
-  const [campanhas, setCampanhas] = useState<Campanha[]>([]);
-  const [carregando, setCarregando] = useState(true);
-
-  const carregar = useCallback(async () => {
-    setCarregando(true);
-    try {
-      const resp = await fetch("/api/automacoes");
-      const json = await resp.json();
-      if (json.success) setCampanhas(json.data);
-    } catch {
-      toast.error("Erro ao carregar histórico");
-    } finally {
-      setCarregando(false);
-    }
-  }, []);
-
-  useEffect(() => { carregar(); }, [carregar]);
-
-  if (carregando) {
-    return (
-      <div className="flex items-center justify-center py-16 text-muted-foreground">
-        <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Carregando histórico...
-      </div>
-    );
-  }
-
-  if (campanhas.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-        <History className="w-10 h-10 opacity-30" />
-        <p className="text-sm">Nenhuma campanha disparada ainda.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">{campanhas.length} campanha(s) encontrada(s)</p>
-        <Button variant="outline" size="sm" onClick={carregar}>
-          <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Atualizar
-        </Button>
-      </div>
-      <div className="rounded-xl border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead>Campanha</TableHead>
-              <TableHead>Data/Hora</TableHead>
-              <TableHead className="text-center">Total</TableHead>
-              <TableHead className="text-center">Enviados</TableHead>
-              <TableHead className="text-center">Falhas</TableHead>
-              <TableHead className="text-right">Custo Total</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {campanhas.map((c) => {
-              const st = STATUS_LABEL[c.status] ?? { label: c.status, variant: "outline" as const };
-              return (
-                <TableRow key={c.id}>
-                  <TableCell>
-                    <p className="font-medium text-sm">{c.nome}</p>
-                    <p className="text-xs text-muted-foreground truncate max-w-[200px]" title={c.mensagem}>
-                      {c.mensagem}
-                    </p>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                    {formatarData(c.criadoEm)}
-                  </TableCell>
-                  <TableCell className="text-center font-medium">{c.totalContatos}</TableCell>
-                  <TableCell className="text-center text-emerald-600 font-medium">{c.enviados}</TableCell>
-                  <TableCell className="text-center text-red-500 font-medium">{c.falhas}</TableCell>
-                  <TableCell className="text-right font-medium">{formatarMoeda(c.custoTotal)}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={st.variant} className="text-xs">{st.label}</Badge>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
+const STATUS_CONFIG: Record<Status, { label: string; classe: string; Icone: React.ElementType }> = {
+  ativa:    { label: "Ativa",    classe: "bg-emerald-100 text-emerald-700", Icone: CheckCircle2 },
+  pausada:  { label: "Pausada",  classe: "bg-amber-100 text-amber-700",    Icone: Circle },
+  rascunho: { label: "Rascunho", classe: "bg-gray-100 text-gray-600",      Icone: AlertCircle },
 };
 
-// ---------- Seletor de contatos do CRM ----------
+function estadoInicial(modelo: AutomacaoModelo): AutomacaoInstancia {
+  return {
+    status: "rascunho",
+    oferta: modelo.ofertaPadrao,
+    eventoVinculadoNome: "",
+    mensagemWhatsapp: modelo.mensagemWhatsappPadrao,
+    mensagemEmailAssunto: modelo.mensagemEmailAssuntoPadrao ?? "",
+    mensagemEmailCorpo: modelo.mensagemEmailCorpoPadrao ?? "",
+  };
+}
 
-const SeletorCRM = ({
-  onConfirmar,
+// ─── Componente principal ─────────────────────────────────────────────────────
+
+export const AutomacoesCliente = ({
+  contatosPreSelecionados = "",
 }: {
-  onConfirmar: (contatos: ContatoCRM[]) => void;
+  contatosPreSelecionados?: string;
 }) => {
-  const [contatos, setContatos] = useState<ContatoCRM[]>([]);
-  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [carregando, setCarregando] = useState(false);
-  const [busca, setBusca] = useState("");
-  const [filtroTag, setFiltroTag] = useState("");
-  const [filtroEvento, setFiltroEvento] = useState("");
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [eventos, setEventos] = useState<Evento[]>([]);
+  const totalPreSelecionados = contatosPreSelecionados
+    ? contatosPreSelecionados.split(",").filter(Boolean).length
+    : 0;
 
-  // Carregar tags e eventos para os filtros
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/tags").then((r) => r.json()),
-      fetch("/api/eventos").then((r) => r.json()),
-    ]).then(([tagsJson, eventosJson]) => {
-      if (tagsJson.success) setTags(tagsJson.data);
-      if (eventosJson.success) setEventos(eventosJson.data?.eventos ?? []);
-    }).catch(() => {});
-  }, []);
-
-  const buscarContatos = useCallback(async () => {
-    setCarregando(true);
-    try {
-      const params = new URLSearchParams();
-      if (filtroTag) params.set("tagId", filtroTag);
-      if (filtroEvento) params.set("eventoId", filtroEvento);
-      const resp = await fetch(`/api/automacoes/contatos?${params}`);
-      const json = await resp.json();
-      if (json.success) {
-        setContatos(json.data);
-        setSelecionados(new Set(json.data.map((c: ContatoCRM) => c.id)));
-      }
-    } catch {
-      toast.error("Erro ao carregar contatos");
-    } finally {
-      setCarregando(false);
-    }
-  }, [filtroTag, filtroEvento]);
-
-  useEffect(() => { buscarContatos(); }, [buscarContatos]);
-
-  const contatosFiltrados = contatos.filter((c) =>
-    busca ? c.nome.toLowerCase().includes(busca.toLowerCase()) || (c.telefone ?? "").includes(busca) : true
+  // Estado por automação (status + config editável)
+  const [instancias, setInstancias] = useState<Record<string, AutomacaoInstancia>>(
+    () => Object.fromEntries(MODELOS.map((m) => [m.id, estadoInicial(m)]))
   );
 
-  const toggleTodos = () => {
-    if (selecionados.size === contatosFiltrados.length) {
-      setSelecionados(new Set());
-    } else {
-      setSelecionados(new Set(contatosFiltrados.map((c) => c.id)));
-    }
+  const [selecionadaId, setSelecionadaId] = useState<string | null>(null);
+  const modelo = MODELOS.find((m) => m.id === selecionadaId) ?? null;
+  const instancia = selecionadaId ? instancias[selecionadaId] : null;
+
+  const atualizar = (id: string, patch: Partial<AutomacaoInstancia>) =>
+    setInstancias((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+
+  const alterarStatus = (id: string, novoStatus: Status) => {
+    atualizar(id, { status: novoStatus });
+    const nomes: Record<Status, string> = {
+      ativa: "Automação ativada com sucesso",
+      pausada: "Automação pausada",
+      rascunho: "Salvo como rascunho",
+    };
+    toast.success(nomes[novoStatus]);
   };
 
-  const toggleContato = (id: string) => {
-    setSelecionados((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
+  // ── Lista de automações ───────────────────────────────────────────────────
 
-  const contatosSelecionados = contatos.filter((c) => selecionados.has(c.id));
+  if (!selecionadaId) {
+    return (
+      <div className="space-y-6">
+        {/* Banner de pré-seleção vinda da aba Clientes */}
+        {totalPreSelecionados > 0 && (
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-3">
+            <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Users className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-900">
+                {totalPreSelecionados} cliente{totalPreSelecionados !== 1 ? "s" : ""} selecionado{totalPreSelecionados !== 1 ? "s" : ""} da aba Clientes
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Escolha uma automação abaixo para aplicar a esta base.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Aviso de protótipo */}
+        <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
+          <p>
+            <strong>Visualização de produto.</strong> As automações abaixo representam regras contínuas que serão ativadas automaticamente quando os critérios forem atendidos. A execução real será implementada em etapa futura.
+          </p>
+        </div>
+
+        {/* Cards das automações */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {MODELOS.map((m) => {
+            const inst = instancias[m.id];
+            const cor = COR[m.cor];
+            const st = STATUS_CONFIG[inst.status];
+            const StIcon = st.Icone;
+            return (
+              <Card
+                key={m.id}
+                className="shadow-sm hover:shadow-md transition-shadow border cursor-pointer group"
+                onClick={() => setSelecionadaId(m.id)}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-4">
+                    <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0", cor.bg)}>
+                      <m.Icone className={cn("w-5 h-5", cor.icon)} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="font-semibold text-gray-900 leading-tight">{m.nome}</h3>
+                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 flex-shrink-0", st.classe)}>
+                          <StIcon className="w-3 h-3" />
+                          {st.label}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
+                        {m.descricao}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-1">
+                          {m.canais.map((canal) => (
+                            <span key={canal} className="flex items-center gap-1 text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">
+                              {canal === "whatsapp"
+                                ? <Smartphone className="w-3 h-3" />
+                                : <Mail className="w-3 h-3" />}
+                              {canal === "whatsapp" ? "WhatsApp" : "E-mail"}
+                            </span>
+                          ))}
+                        </div>
+                        <span className="text-xs text-primary font-medium flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          Configurar <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gatilho */}
+                  <div className="mt-4 pt-3 border-t flex items-center gap-2 text-xs text-muted-foreground">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Gatilho: {m.gatilho}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Detalhe / Configuração ────────────────────────────────────────────────
+
+  if (!modelo || !instancia) return null;
+  const cor = COR[modelo.cor];
+  const st = STATUS_CONFIG[instancia.status];
+  const StIcon = st.Icone;
 
   return (
-    <div className="space-y-4">
-      {/* Filtros */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome ou telefone..."
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select value={filtroTag || "todos"} onValueChange={(v) => setFiltroTag(v === "todos" ? "" : (v ?? ""))}>
-          <SelectTrigger>
-            <SelectValue placeholder="Filtrar por tag" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todas as tags</SelectItem>
-            {tags.map((t) => (
-              <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filtroEvento || "todos"} onValueChange={(v) => setFiltroEvento(v === "todos" ? "" : (v ?? ""))}>
-          <SelectTrigger>
-            <SelectValue placeholder="Filtrar por evento" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os eventos</SelectItem>
-            {eventos.map((e) => (
-              <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Contador e seleção em massa */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button onClick={toggleTodos} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            {selecionados.size === contatosFiltrados.length && contatosFiltrados.length > 0
-              ? <CheckSquare className="w-4 h-4 text-primary" />
-              : <Square className="w-4 h-4" />}
-            Selecionar todos
-          </button>
-          {selecionados.size > 0 && (
-            <Badge variant="secondary" className="text-xs">
-              {selecionados.size} selecionado(s)
-            </Badge>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {carregando ? "Carregando..." : `${contatosFiltrados.length} contato(s) com telefone`}
-        </p>
-      </div>
-
-      {/* Lista */}
-      <div className="rounded-xl border overflow-hidden max-h-72 overflow-y-auto">
-        {carregando ? (
-          <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
-            <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Carregando...
-          </div>
-        ) : contatosFiltrados.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-            <Users className="w-8 h-8 opacity-30" />
-            <p className="text-sm">Nenhum contato com telefone encontrado</p>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="w-10"></TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>E-mail</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {contatosFiltrados.map((c) => (
-                <TableRow
-                  key={c.id}
-                  className="cursor-pointer"
-                  onClick={() => toggleContato(c.id)}
-                >
-                  <TableCell>
-                    {selecionados.has(c.id)
-                      ? <CheckSquare className="w-4 h-4 text-primary" />
-                      : <Square className="w-4 h-4 text-muted-foreground" />}
-                  </TableCell>
-                  <TableCell className="text-sm font-medium">{c.nome}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{c.telefone}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{c.email ?? "—"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </div>
-
+    <div className="space-y-6">
+      {/* Breadcrumb */}
       <Button
-        onClick={() => onConfirmar(contatosSelecionados)}
-        disabled={contatosSelecionados.length === 0}
+        variant="ghost"
+        className="-ml-2 gap-2"
+        onClick={() => setSelecionadaId(null)}
       >
-        Usar {contatosSelecionados.length} contato(s) selecionado(s)
+        <ArrowLeft className="w-4 h-4" />
+        Voltar para Automações
       </Button>
-    </div>
-  );
-};
 
-// ---------- Wizard principal ----------
+      {/* Header da automação */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0", cor.bg)}>
+            <modelo.Icone className={cn("w-6 h-6", cor.icon)} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">{modelo.nome}</h2>
+            <p className="text-sm text-muted-foreground">{modelo.descricao}</p>
+          </div>
+        </div>
+        <span className={cn("text-sm px-3 py-1 rounded-full font-medium flex items-center gap-1.5 flex-shrink-0", st.classe)}>
+          <StIcon className="w-3.5 h-3.5" />
+          {st.label}
+        </span>
+      </div>
 
-export const AutomacoesCliente = () => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [etapa, setEtapa] = useState<Etapa>("upload");
-  const [origem, setOrigem] = useState<Origem>("planilha");
-
-  // Planilha
-  const [arquivo, setArquivo] = useState<File | null>(null);
-  const [colunas, setColunas] = useState<string[]>([]);
-  const [preview, setPreview] = useState<Record<string, string>[]>([]);
-  const [totalLinhas, setTotalLinhas] = useState(0);
-  const [mapeamento, setMapeamento] = useState<Record<string, string>>({});
-
-  // CRM
-  const [contatosCRM, setContatosCRM] = useState<ContatoCRM[]>([]);
-
-  const [carregando, setCarregando] = useState(false);
-  const [progresso, setProgresso] = useState(0);
-
-  // Simulação
-  const [nomeCampanha, setNomeCampanha] = useState("");
-  const [quantidade, setQuantidade] = useState("");
-  const [mensagem, setMensagem] = useState("");
-  const [custoUnitario] = useState(0.35);
-
-  const [resultado, setResultado] = useState<ResultadoDisparo | null>(null);
-  const [validacao, setValidacao] = useState<Validacao | null>(null);
-
-  const totalDisponivel = origem === "crm" ? contatosCRM.length : (validacao?.validos ?? totalLinhas);
-  const quantidadeNum = parseInt(quantidade, 10);
-  const quantidadeValida = !isNaN(quantidadeNum) && quantidadeNum > 0 && quantidadeNum <= totalDisponivel;
-  const custoEstimado = quantidadeValida ? parseFloat((quantidadeNum * custoUnitario).toFixed(2)) : 0;
-
-  const handleArquivo = async (file: File) => {
-    setArquivo(file);
-    setCarregando(true);
-    try {
-      const form = new FormData();
-      form.append("arquivo", file);
-      const resp = await fetch("/api/importar", { method: "POST", body: form });
-      const json = await resp.json();
-      if (!json.success) throw new Error(json.error);
-      const { colunas: cols, preview: prev, totalLinhas: total } = json.data;
-      setColunas(cols);
-      setPreview(prev);
-      setTotalLinhas(total);
-      const autoMap: Record<string, string> = {};
-      cols.forEach((col: string) => {
-        const c = col.toLowerCase();
-        if (c.includes("nome")) autoMap[col] = "nome";
-        else if (c.includes("tel") || c.includes("fone") || c.includes("celular") || c.includes("whatsapp")) autoMap[col] = "telefone";
-        else if (c.includes("email") || c.includes("e-mail")) autoMap[col] = "email";
-        else autoMap[col] = "";
-      });
-      setMapeamento(autoMap);
-      setEtapa("mapeamento");
-    } catch (error) {
-      toast.error(`Erro ao processar arquivo: ${error}`);
-    } finally {
-      setCarregando(false);
-    }
-  };
-
-  const handleConfirmarCRM = (contatos: ContatoCRM[]) => {
-    setContatosCRM(contatos);
-    setQuantidade(String(contatos.length));
-    setValidacao({ total: contatos.length, validos: contatos.length, invalidos: 0, duplicados: 0 });
-    setEtapa("simulacao");
-  };
-
-  const handleValidarEAvancar = async () => {
-    if (!arquivo) return;
-    setCarregando(true);
-    try {
-      const form = new FormData();
-      form.append("arquivo", arquivo);
-      form.append("mapeamento", JSON.stringify(mapeamento));
-      const resp = await fetch("/api/automacoes/validar", { method: "POST", body: form });
-      const json = await resp.json();
-      if (!json.success) throw new Error(json.error);
-      const v: Validacao = json.data;
-      setValidacao(v);
-      setQuantidade(String(v.validos));
-      setEtapa("simulacao");
-    } catch {
-      toast.error("Erro ao validar base de contatos");
-    } finally {
-      setCarregando(false);
-    }
-  };
-
-  const handleDisparar = async () => {
-    if (!nomeCampanha || !mensagem || !quantidadeValida) return;
-    setEtapa("disparando");
-    setProgresso(10);
-    setCarregando(true);
-
-    try {
-      const form = new FormData();
-      form.append("nomeCampanha", nomeCampanha);
-      form.append("mensagem", mensagem);
-      form.append("quantidade", String(quantidadeNum));
-      form.append("origem", origem);
-
-      if (origem === "crm") {
-        const selecionados = contatosCRM.slice(0, quantidadeNum);
-        form.append("contatosJson", JSON.stringify(selecionados.map((c) => ({ nome: c.nome, telefone: c.telefone }))));
-      } else {
-        if (!arquivo) return;
-        form.append("arquivo", arquivo);
-        form.append("mapeamento", JSON.stringify(mapeamento));
-      }
-
-      setProgresso(30);
-      const resp = await fetch("/api/automacoes/disparar", { method: "POST", body: form });
-      setProgresso(90);
-      const json = await resp.json();
-      if (!json.success) throw new Error(json.error);
-      setProgresso(100);
-      setResultado(json.data);
-      setEtapa("resultado");
-      toast.success("Campanha disparada com sucesso!");
-    } catch (error) {
-      toast.error(`Erro no disparo: ${error}`);
-      setEtapa("simulacao");
-    } finally {
-      setCarregando(false);
-    }
-  };
-
-  const reiniciar = () => {
-    setEtapa("upload");
-    setOrigem("planilha");
-    setArquivo(null);
-    setColunas([]);
-    setPreview([]);
-    setTotalLinhas(0);
-    setMapeamento({});
-    setContatosCRM([]);
-    setNomeCampanha("");
-    setQuantidade("");
-    setMensagem("");
-    setResultado(null);
-    setProgresso(0);
-    setValidacao(null);
-  };
-
-  const temTelefone = Object.values(mapeamento).some((v) => v === "telefone");
-  const temNome = Object.values(mapeamento).some((v) => v === "nome");
-
-  // ---- Resultado ----
-  if (etapa === "resultado" && resultado) {
-    return (
-      <Tabs defaultValue="nova">
-        <TabsList className="mb-6">
-          <TabsTrigger value="nova"><Send className="w-4 h-4 mr-2" />Nova Campanha</TabsTrigger>
-          <TabsTrigger value="historico"><History className="w-4 h-4 mr-2" />Histórico</TabsTrigger>
+      {/* Conteúdo em tabs */}
+      <Tabs defaultValue="configuracao">
+        <TabsList>
+          <TabsTrigger value="configuracao" className="gap-2">
+            <Settings className="w-4 h-4" /> Configuração
+          </TabsTrigger>
+          <TabsTrigger value="audiencia" className="gap-2">
+            <Users className="w-4 h-4" /> Audiência
+          </TabsTrigger>
+          <TabsTrigger value="mensagem" className="gap-2">
+            <MessageSquare className="w-4 h-4" /> Mensagem
+          </TabsTrigger>
         </TabsList>
-        <TabsContent value="nova">
+
+        {/* ── Aba: Configuração ── */}
+        <TabsContent value="configuracao" className="mt-4 space-y-4">
           <Card className="shadow-sm">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-6 h-6 text-emerald-500" />
-                <CardTitle>Campanha Disparada!</CardTitle>
-              </div>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Regra da Automação</CardTitle>
+              <CardDescription>Defina como e quando esta automação será executada</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-blue-50 rounded-xl p-4 text-center">
-                  <p className="text-3xl font-bold text-blue-700">{resultado.totalContatos}</p>
-                  <p className="text-sm text-blue-600 mt-1">Total disparado</p>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Gatilho</Label>
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border">
+                    <Clock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm text-gray-700">{modelo.gatilho}</span>
+                  </div>
                 </div>
-                <div className="bg-emerald-50 rounded-xl p-4 text-center">
-                  <p className="text-3xl font-bold text-emerald-700">{resultado.enviados}</p>
-                  <p className="text-sm text-emerald-600 mt-1">Enviados</p>
-                </div>
-                <div className="bg-red-50 rounded-xl p-4 text-center">
-                  <p className="text-3xl font-bold text-red-700">{resultado.falhas}</p>
-                  <p className="text-sm text-red-600 mt-1">Falhas</p>
-                </div>
-                <div className="bg-violet-50 rounded-xl p-4 text-center">
-                  <p className="text-3xl font-bold text-violet-700">{formatarMoeda(resultado.custoTotal)}</p>
-                  <p className="text-sm text-violet-600 mt-1">Custo total</p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">Condição</Label>
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border">
+                    <Zap className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm text-gray-700">{modelo.condicao}</span>
+                  </div>
                 </div>
               </div>
-              <Button onClick={reiniciar}>
-                <RefreshCw className="w-4 h-4 mr-2" /> Nova Campanha
-              </Button>
+
+              {modelo.eventoVinculado && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="evento">Evento vinculado</Label>
+                  <Select
+                    value={instancia.eventoVinculadoNome || "nenhum"}
+                    onValueChange={(v) =>
+                      atualizar(modelo.id, { eventoVinculadoNome: v === "nenhum" ? "" : (v ?? "") })
+                    }
+                  >
+                    <SelectTrigger id="evento">
+                      <SelectValue placeholder="Selecionar evento..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nenhum">Selecionar evento...</SelectItem>
+                      <SelectItem value="Réveillon Destino 2025">Réveillon Destino 2025</SelectItem>
+                      <SelectItem value="Oboé Dezembro 2025">Oboé Dezembro 2025</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <Separator />
+
+              <div className="space-y-1.5">
+                <Label htmlFor="oferta">Oferta / Benefício</Label>
+                <Input
+                  id="oferta"
+                  value={instancia.oferta}
+                  onChange={(e) => atualizar(modelo.id, { oferta: e.target.value })}
+                  placeholder="Descreva a oferta ou benefício desta automação..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use este campo para descrever o que será comunicado (desconto, acesso antecipado, novidade, etc.)
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Canais</Label>
+                <div className="flex gap-2">
+                  {modelo.canais.map((canal) => (
+                    <span
+                      key={canal}
+                      className="flex items-center gap-1.5 text-sm font-medium bg-gray-100 px-3 py-1.5 rounded-lg"
+                    >
+                      {canal === "whatsapp"
+                        ? <Smartphone className="w-4 h-4 text-emerald-600" />
+                        : <Mail className="w-4 h-4 text-blue-600" />}
+                      {canal === "whatsapp" ? "WhatsApp" : "E-mail"}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="historico"><Historico /></TabsContent>
-      </Tabs>
-    );
-  }
 
-  // ---- Disparando ----
-  if (etapa === "disparando") {
-    return (
-      <Card className="shadow-sm">
-        <CardContent className="p-8 text-center space-y-4">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-            <Send className="w-8 h-8 text-primary animate-pulse" />
-          </div>
-          <div>
-            <p className="font-semibold text-lg text-gray-900">Disparando mensagens...</p>
-            <p className="text-sm text-muted-foreground mt-1">Enviando para {quantidadeNum} contatos via WhatsApp</p>
-          </div>
-          <Progress value={progresso} className="max-w-xs mx-auto" />
-          <p className="text-sm text-muted-foreground">{progresso}%</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Tabs defaultValue="nova">
-      <TabsList className="mb-6">
-        <TabsTrigger value="nova"><Send className="w-4 h-4 mr-2" />Nova Campanha</TabsTrigger>
-        <TabsTrigger value="historico"><History className="w-4 h-4 mr-2" />Histórico</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="nova" className="space-y-4">
-
-        {/* ---- UPLOAD / SELEÇÃO ---- */}
-        {etapa === "upload" && (
+        {/* ── Aba: Audiência ── */}
+        <TabsContent value="audiencia" className="mt-4 space-y-4">
           <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base">1. Selecionar base de contatos</CardTitle>
-              <CardDescription>Escolha de onde virão os contatos para esta campanha</CardDescription>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Prévia da Audiência</CardTitle>
+              <CardDescription>
+                Estimativa de clientes que entrarão nesta regra quando ativada
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Tabs value={origem} onValueChange={(v) => setOrigem(v as Origem)}>
-                <TabsList className="mb-6 w-full sm:w-auto">
-                  <TabsTrigger value="planilha" className="flex items-center gap-2">
-                    <FileSpreadsheet className="w-4 h-4" /> Importar Planilha
-                  </TabsTrigger>
-                  <TabsTrigger value="crm" className="flex items-center gap-2">
-                    <Database className="w-4 h-4" /> Base do CRM
-                  </TabsTrigger>
-                </TabsList>
+            <CardContent className="space-y-5">
+              {/* Número principal */}
+              <div className={cn("rounded-xl p-5 flex items-center gap-5", cor.bg)}>
+                <div className="text-center">
+                  <p className={cn("text-5xl font-bold", cor.icon)}>
+                    {totalPreSelecionados > 0 ? totalPreSelecionados : modelo.audiencia.totalMock}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {totalPreSelecionados > 0 ? "clientes pré-selecionados" : "clientes elegíveis (estimado)"}
+                  </p>
+                </div>
+                <Separator orientation="vertical" className="h-14" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 mb-1">{modelo.audiencia.descricao}</p>
+                  <p className="text-xs text-muted-foreground">{modelo.audiencia.porqueElegiveis}</p>
+                </div>
+              </div>
 
-                {/* Planilha */}
-                <TabsContent value="planilha">
-                  <div
-                    className="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
-                    onClick={() => inputRef.current?.click()}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const file = e.dataTransfer.files[0];
-                      if (file) handleArquivo(file);
-                    }}
-                  >
-                    <input
-                      ref={inputRef}
-                      type="file"
-                      accept=".xlsx,.csv"
-                      className="hidden"
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleArquivo(f); }}
-                    />
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center">
-                        {carregando
-                          ? <RefreshCw className="w-8 h-8 text-primary animate-spin" />
-                          : <Upload className="w-8 h-8 text-primary" />}
+              {/* Exemplos */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Exemplos de clientes elegíveis</p>
+                <div className="space-y-2">
+                  {modelo.audiencia.exemplos.map((nome) => (
+                    <div key={nome} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50 border">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-bold text-primary">
+                          {nome.charAt(0)}
+                        </span>
                       </div>
-                      <div>
-                        <p className="font-semibold text-gray-900 text-lg">
-                          {carregando ? "Processando arquivo..." : "Arraste ou clique para fazer upload"}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">Suporta .xlsx e .csv</p>
-                      </div>
-                      {!carregando && <Button variant="outline">Selecionar arquivo</Button>}
-                    </div>
-                  </div>
-                </TabsContent>
-
-                {/* Base do CRM */}
-                <TabsContent value="crm">
-                  <SeletorCRM onConfirmar={handleConfirmarCRM} />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ---- MAPEAMENTO (apenas planilha) ---- */}
-        {etapa === "mapeamento" && origem === "planilha" && (
-          <>
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileSpreadsheet className="w-5 h-5 text-primary" />
-                  2. Mapeamento de Colunas
-                </CardTitle>
-                <CardDescription>
-                  {arquivo?.name} — {totalLinhas} contatos encontrados
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {colunas.map((col) => (
-                    <div key={col} className="flex items-center gap-3">
-                      <span className="text-sm text-muted-foreground bg-gray-50 px-3 py-2 rounded-lg border flex-1 truncate" title={col}>
-                        {col}
-                      </span>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      <Select
-                        value={mapeamento[col] ?? ""}
-                        onValueChange={(v) => setMapeamento((prev) => ({ ...prev, [col]: v ?? "" }))}
-                      >
-                        <SelectTrigger className="flex-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CAMPOS_SISTEMA.map((c) => (
-                            <SelectItem key={c.value || "ignorar"} value={c.value}>{c.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <span className="text-sm text-gray-700">{nome}</span>
+                      <Badge variant="secondary" className="ml-auto text-xs">Elegível</Badge>
                     </div>
                   ))}
-                </div>
-                {(!temNome || !temTelefone) && (
-                  <p className="flex items-center gap-1.5 text-sm text-amber-600">
-                    <AlertCircle className="w-4 h-4" />
-                    Mapeie as colunas &quot;Nome&quot; e &quot;Telefone&quot; para continuar
+                  <p className="text-xs text-center text-muted-foreground pt-1">
+                    + {(totalPreSelecionados > 0 ? totalPreSelecionados : modelo.audiencia.totalMock) - modelo.audiencia.exemplos.length} outros clientes
                   </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {preview.length > 0 && (
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-sm">Preview (primeiras {preview.length} linhas)</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {colunas.map((c) => <TableHead key={c} className="text-xs whitespace-nowrap">{c}</TableHead>)}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {preview.map((linha, i) => (
-                        <TableRow key={i}>
-                          {colunas.map((c) => (
-                            <TableCell key={c} className="text-xs max-w-[150px] truncate" title={linha[c]}>{linha[c]}</TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={reiniciar}>Cancelar</Button>
-              <Button onClick={handleValidarEAvancar} disabled={!temNome || !temTelefone || carregando}>
-                Próximo: Configurar Disparo
-              </Button>
-            </div>
-          </>
-        )}
-
-        {/* ---- SIMULAÇÃO + MENSAGEM ---- */}
-        {etapa === "simulacao" && (
-          <>
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Users className="w-5 h-5 text-primary" />
-                  {origem === "crm" ? "2." : "3."} Resumo da Base
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="bg-blue-50 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-blue-700">{validacao?.total ?? totalDisponivel}</p>
-                    <p className="text-sm text-blue-600 mt-1">
-                      {origem === "crm" ? "Selecionados" : "Total importado"}
-                    </p>
-                  </div>
-                  <div className="bg-emerald-50 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-emerald-700">{validacao?.validos ?? totalDisponivel}</p>
-                    <p className="text-sm text-emerald-600 mt-1">Válidos</p>
-                  </div>
-                  <div className="bg-red-50 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-red-700">{validacao?.invalidos ?? 0}</p>
-                    <p className="text-sm text-red-600 mt-1">Sem telefone</p>
-                  </div>
-                  <div className="bg-amber-50 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-amber-700">{validacao?.duplicados ?? 0}</p>
-                    <p className="text-sm text-amber-600 mt-1">Duplicados</p>
-                  </div>
                 </div>
+              </div>
 
-                {origem === "crm" && contatosCRM.length > 0 && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-center gap-2">
-                    <Database className="w-4 h-4 text-blue-600" />
-                    <p className="text-sm text-blue-700">
-                      Usando <strong>{contatosCRM.length} contatos</strong> da base do CRM
-                    </p>
-                    <button
-                      onClick={() => setEtapa("upload")}
-                      className="ml-auto text-xs text-blue-600 underline hover:no-underline"
-                    >
-                      Alterar seleção
-                    </button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-xs text-amber-800">
+                <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-600" />
+                <span>
+                  Os números acima são uma estimativa visual. A contagem real será calculada automaticamente quando a automação for ativada.
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
+        {/* ── Aba: Mensagem ── */}
+        <TabsContent value="mensagem" className="mt-4 space-y-4">
+          {/* WhatsApp */}
+          {modelo.canais.includes("whatsapp") && (
             <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-primary" />
-                  {origem === "crm" ? "3." : "4."} Simulação de Disparos
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Nome da campanha</Label>
-                  <Input
-                    placeholder="Ex: Campanha Abril 2026"
-                    value={nomeCampanha}
-                    onChange={(e) => setNomeCampanha(e.target.value)}
-                    className="max-w-sm"
-                  />
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-emerald-600" />
+                  <CardTitle className="text-base">Mensagem WhatsApp</CardTitle>
                 </div>
-                <Separator />
-                <div className="space-y-2">
-                  <Label>Quantidade de disparos desejada (máx: {totalDisponivel})</Label>
-                  <Input
-                    type="number"
-                    placeholder={`1 a ${totalDisponivel}`}
-                    min={1}
-                    max={totalDisponivel}
-                    value={quantidade}
-                    onChange={(e) => setQuantidade(e.target.value)}
-                    className="max-w-xs"
-                  />
-                  {quantidade && !quantidadeValida && (
-                    <p className="text-sm text-red-500 flex items-center gap-1">
-                      <XCircle className="w-4 h-4" /> Informe um número entre 1 e {totalDisponivel}
-                    </p>
-                  )}
-                </div>
-                {quantidadeValida && (
-                  <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-violet-800">Custo estimado</p>
-                      <p className="text-xs text-violet-600 mt-0.5">
-                        {quantidadeNum} mensagens × {formatarMoeda(custoUnitario)}
-                      </p>
-                    </div>
-                    <p className="text-2xl font-bold text-violet-700">{formatarMoeda(custoEstimado)}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-primary" />
-                  {origem === "crm" ? "4." : "5."} Mensagem / Template
-                </CardTitle>
-                <CardDescription>Texto que será enviado para todos os contatos</CardDescription>
+                <CardDescription>
+                  Use <code className="bg-gray-100 px-1 rounded text-xs">{"{nome}"}</code> para personalizar com o nome do cliente
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Textarea
-                  placeholder="Olá! Temos uma novidade especial para você..."
-                  rows={5}
-                  value={mensagem}
-                  onChange={(e) => setMensagem(e.target.value)}
+                  rows={8}
+                  value={instancia.mensagemWhatsapp}
+                  onChange={(e) => atualizar(modelo.id, { mensagemWhatsapp: e.target.value })}
+                  className="font-mono text-sm resize-none"
+                  placeholder="Digite a mensagem de WhatsApp..."
                 />
-                <p className="text-xs text-muted-foreground">{mensagem.length} caracteres</p>
+                <p className="text-xs text-muted-foreground text-right">
+                  {instancia.mensagemWhatsapp.length} caracteres
+                </p>
+
+                {/* Preview */}
+                <div>
+                  <p className="text-xs font-medium text-gray-600 mb-2">Preview</p>
+                  <div className="bg-[#ece5dd] rounded-xl p-4">
+                    <div className="bg-white rounded-xl p-3 max-w-[280px] shadow-sm">
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                        {instancia.mensagemWhatsapp.replace("{nome}", "João")}
+                      </p>
+                      <p className="text-[10px] text-gray-400 text-right mt-1">✓✓</p>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
+          )}
 
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setEtapa(origem === "crm" ? "upload" : "mapeamento")}>Voltar</Button>
-              <Button
-                onClick={handleDisparar}
-                disabled={!nomeCampanha || !mensagem || !quantidadeValida}
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Disparar {quantidadeValida ? quantidadeNum : ""} mensagens
-              </Button>
+          {/* E-mail */}
+          {modelo.canais.includes("email") && (
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-blue-600" />
+                  <CardTitle className="text-base">Mensagem E-mail</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="email-assunto">Assunto</Label>
+                  <Input
+                    id="email-assunto"
+                    value={instancia.mensagemEmailAssunto}
+                    onChange={(e) => atualizar(modelo.id, { mensagemEmailAssunto: e.target.value })}
+                    placeholder="Assunto do e-mail..."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="email-corpo">Corpo</Label>
+                  <Textarea
+                    id="email-corpo"
+                    rows={7}
+                    value={instancia.mensagemEmailCorpo}
+                    onChange={(e) => atualizar(modelo.id, { mensagemEmailCorpo: e.target.value })}
+                    className="resize-none text-sm"
+                    placeholder="Corpo do e-mail..."
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* ── Ações finais ── */}
+      <Card className="shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Status atual</p>
+              <p className="text-xs text-muted-foreground">
+                {instancia.status === "ativa"
+                  ? "Esta automação está ativa e será executada automaticamente."
+                  : instancia.status === "pausada"
+                  ? "Esta automação está pausada e não será executada."
+                  : "Este rascunho ainda não foi ativado."}
+              </p>
             </div>
-          </>
-        )}
-      </TabsContent>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => alterarStatus(modelo.id, "rascunho")}
+                disabled={instancia.status === "rascunho"}
+                className="gap-2"
+              >
+                <Save className="w-4 h-4" />
+                Salvar Rascunho
+              </Button>
 
-      <TabsContent value="historico">
-        <Historico />
-      </TabsContent>
-    </Tabs>
+              {instancia.status === "ativa" ? (
+                <Button
+                  variant="outline"
+                  onClick={() => alterarStatus(modelo.id, "pausada")}
+                  className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"
+                >
+                  <Pause className="w-4 h-4" />
+                  Pausar Automação
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => alterarStatus(modelo.id, "ativa")}
+                  className="gap-2"
+                >
+                  <Play className="w-4 h-4" />
+                  Ativar Automação
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
