@@ -204,7 +204,7 @@ const DetalheGrupoPage = async ({ params }: { params: Promise<{ id: string }> })
       {/* Bloco 3 — Base Consolidada de Clientes */}
       <Card className="shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Base Consolidada de Clientes ({clientes.length})</CardTitle>
+          <CardTitle className="text-base">Base Consolidada de Clientes ({stats.totalClientes.toLocaleString("pt-BR")}{clientes.length < stats.totalClientes ? ` — exibindo top ${clientes.length}` : ""})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>

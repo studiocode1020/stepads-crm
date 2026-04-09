@@ -103,6 +103,15 @@ async function importarArquivo(
         contatosExistentes++;
       }
     } else {
+      // Atualiza campos NULL com dados do CSV (não sobrescreve dados existentes)
+      const updateData: Record<string, unknown> = {};
+      if (!contato.genero && genero) updateData.genero = genero;
+      if (!contato.estado && estado) updateData.estado = estado;
+      if (!contato.origem && origem) updateData.origem = origem;
+      if (!contato.dataNascimento && dataNascimento) updateData.dataNascimento = dataNascimento;
+      if (Object.keys(updateData).length > 0) {
+        contato = await prisma.contact.update({ where: { id: contato.id }, data: updateData });
+      }
       contatosExistentes++;
     }
 
