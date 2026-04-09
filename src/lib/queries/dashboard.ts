@@ -11,6 +11,7 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
     importacoesRecentes,
     eventos,
     proximoEvento,
+    eventoMaisPopular,
   ] = await Promise.all([
     prisma.contact.count(),
     prisma.contact.count({ where: { criadoEm: { gte: inicioMes } } }),
@@ -36,6 +37,10 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
       },
       orderBy: { data: "asc" },
       select: { id: true, nome: true, data: true, status: true },
+    }),
+    prisma.event.findFirst({
+      include: { _count: { select: { participacoes: true } } },
+      orderBy: { participacoes: { _count: "desc" } },
     }),
   ]);
 
@@ -75,6 +80,9 @@ export const buscarMetricasDashboard = unstable_cache(async () => {
           status: proximoEvento.status,
         }
       : null,
+    eventoMaisPopular: eventoMaisPopular
+      ? { id: eventoMaisPopular.id, nome: eventoMaisPopular.nome, participantes: eventoMaisPopular._count.participacoes }
+      : null,
     eventos: eventos.map((e) => ({
       id: e.id,
       nome: e.nome,
@@ -106,3 +114,38 @@ export const buscarContatosPorMes = unstable_cache(async () => {
     total: Number(d.total),
   }));
 }, ["dashboard-contatos-por-mes"], { revalidate: 60 });
+
+export const buscarAniversariantesDoMes = async (mes?: number) => {
+  const mesAlvo = mes ?? new Date().getMonth() + 1;
+
+  const contatos = await prisma.$queryRaw<{
+    id: string;
+    nome: string;
+    email: string | null;
+    telefone: string | null;
+    dataNascimento: Date | null;
+    totalEventos: bigint;
+  }[]>`
+    SELECT
+      c.id,
+      c.nome,
+      c.email,
+      c.telefone,
+      c."dataNascimento",
+      COUNT(ep."eventId") as "totalEventos"
+    FROM contacts c
+    LEFT JOIN event_participations ep ON ep."contactId" = c.id
+    WHERE EXTRACT(MONTH FROM c."dataNascimento") = ${mesAlvo}
+    GROUP BY c.id, c.nome, c.email, c.telefone, c."dataNascimento"
+    ORDER BY EXTRACT(DAY FROM c."dataNascimento") ASC
+  `;
+
+  return contatos.map((c) => ({
+    id: c.id,
+    nome: c.nome,
+    email: c.email,
+    telefone: c.telefone,
+    dataNascimento: c.dataNascimento ? c.dataNascimento.toISOString() : null,
+    totalEventos: Number(c.totalEventos),
+  }));
+};

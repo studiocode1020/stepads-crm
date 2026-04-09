@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  Users, Calendar, TrendingUp, Zap, FileUp, ArrowUpRight, Repeat2, DollarSign,
+  Users, Calendar, TrendingUp, Zap, FileUp, ArrowUpRight, Repeat2, DollarSign, Cake, Trophy,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ type Metricas = {
   clientesRecorrentes: number;
   ticketMedio: number | null;
   proximoEvento: { id: string; nome: string; data: string; status: string } | null;
+  eventoMaisPopular: { id: string; nome: string; participantes: number } | null;
   eventos: EventoCard[];
 };
 
@@ -211,6 +212,64 @@ export const DashboardCliente = ({
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* ── Cards secundários ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+        {/* Aniversariantes do mês — clicável */}
+        <Link href="/aniversariantes">
+          <Card className="border shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-rose-200 group">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Aniversariantes do Mês</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-1">
+                    {metricas.aniversariantesDoMes.toLocaleString("pt-BR")}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    fazem aniversário esse mês
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="p-3 rounded-xl text-rose-600 bg-rose-50">
+                    <Cake className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs text-primary group-hover:underline flex items-center gap-0.5">
+                    Ver lista <ArrowUpRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        {/* Evento Mais Popular */}
+        <Link href={metricas.eventoMaisPopular ? `/eventos/${metricas.eventoMaisPopular.id}` : "/eventos"}>
+          <Card className="border shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-orange-200 group">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-muted-foreground">Evento Mais Popular</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-1">
+                    {metricas.eventoMaisPopular?.participantes.toLocaleString("pt-BR") ?? "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 truncate" title={metricas.eventoMaisPopular?.nome}>
+                    {metricas.eventoMaisPopular?.nome ?? "Nenhum evento"}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="p-3 rounded-xl text-orange-600 bg-orange-50">
+                    <Trophy className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs text-primary group-hover:underline flex items-center gap-0.5">
+                    Ver evento <ArrowUpRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* ── Eventos da produtora ── */}
