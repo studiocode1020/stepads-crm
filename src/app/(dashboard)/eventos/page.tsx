@@ -1,4 +1,4 @@
-import { buscarEventos } from "@/lib/queries/eventos";
+import { buscarEventos, buscarGruposEvento } from "@/lib/queries/eventos";
 import { EventosCliente } from "./eventos-cliente";
 
 export const dynamic = "force-dynamic";
@@ -12,19 +12,26 @@ const EventosPage = async ({
   const pagina = Number(params.pagina ?? 1);
   const busca = params.busca ?? "";
 
-  const { eventos, total, paginas } = await buscarEventos({ pagina, busca });
+  const [{ eventos, total }, grupos] = await Promise.all([
+    buscarEventos({ pagina, busca }),
+    buscarGruposEvento(),
+  ]);
+
+  // Separa eventos sem grupo
+  const eventosSemGrupo = eventos.filter((e) => !e.eventGroup);
 
   return (
     <div className="p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Eventos</h1>
-        <p className="text-muted-foreground mt-1">{total.toLocaleString("pt-BR")} eventos cadastrados</p>
+        <p className="text-muted-foreground mt-1">
+          {grupos.length} grupo{grupos.length !== 1 ? "s" : ""} · {total.toLocaleString("pt-BR")} eventos cadastrados
+        </p>
       </div>
       <EventosCliente
-        eventos={eventos}
-        total={total}
-        paginas={paginas}
-        paginaAtual={pagina}
+        grupos={grupos}
+        eventosSemGrupo={eventosSemGrupo}
+        totalEventos={total}
         buscaInicial={busca}
       />
     </div>

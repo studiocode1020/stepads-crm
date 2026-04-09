@@ -60,6 +60,8 @@ model Contact {
   telefone       String?   @unique
   dataNascimento DateTime?
   origem         String?
+  genero         String?
+  estado         String?
   observacoes    String?   @db.Text
   criadoEm      DateTime  @default(now())
   atualizadoEm  DateTime  @updatedAt
@@ -86,6 +88,18 @@ model Company {
   @@map("companies")
 }
 
+model EventGroup {
+  id           String   @id @default(cuid())
+  nome         String   @unique
+  descricao    String?  @db.Text
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  edicoes Event[]
+
+  @@map("event_groups")
+}
+
 model Event {
   id           String   @id @default(cuid())
   nome         String
@@ -97,10 +111,12 @@ model Event {
   orcamento    Float?
   descricao    String?  @db.Text
   companyId    String?
+  eventGroupId String?
   criadoEm    DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
   company       Company?             @relation(fields: [companyId], references: [id])
+  eventGroup    EventGroup?          @relation(fields: [eventGroupId], references: [id], onDelete: SetNull)
   participacoes EventParticipation[]
   importLogs    ImportLog[]
 

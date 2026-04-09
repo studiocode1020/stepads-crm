@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,30 +33,52 @@ const STATUS_OPCOES = [
   { valor: "cancelado", label: "Cancelado" },
 ];
 
+type Grupo = { id: string; nome: string };
+
 export const DialogNovoEvento = ({
   aberto,
   onFechar,
+  groupId,
 }: {
   aberto: boolean;
   onFechar: () => void;
+  groupId?: string;
 }) => {
   const router = useRouter();
   const [carregando, setCarregando] = useState(false);
   const [status, setStatus] = useState("planejamento");
+  const [eventGroupId, setEventGroupId] = useState<string>(groupId ?? "");
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<Form>({
     resolver: zodResolver(schema),
   });
 
+  // Carrega grupos quando dialog abre
+  useEffect(() => {
+    if (!aberto) return;
+    fetch("/api/eventos/grupos?modo=simples")
+      .then((r) => r.json())
+      .then((j) => { if (j.success) setGrupos(j.data); })
+      .catch(() => {});
+  }, [aberto]);
+
+  // Sincroniza groupId prop
+  useEffect(() => {
+    setEventGroupId(groupId ?? "");
+  }, [groupId, aberto]);
+
   const onSubmit = async (dados: Form) => {
     setCarregando(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...dados,
         status,
         capacidade: dados.capacidade ? Number(dados.capacidade) : undefined,
         orcamento: dados.orcamento ? Number(dados.orcamento) : undefined,
       };
+      if (eventGroupId) payload.eventGroupId = eventGroupId;
+
       const resp = await fetch("/api/eventos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,6 +89,7 @@ export const DialogNovoEvento = ({
         toast.success("Evento criado com sucesso!");
         reset();
         setStatus("planejamento");
+        setEventGroupId(groupId ?? "");
         onFechar();
         router.refresh();
       } else {
@@ -108,6 +131,23 @@ export const DialogNovoEvento = ({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Grupo do evento</Label>
+            <Select
+              value={eventGroupId || "none"}
+              onValueChange={(v) => setEventGroupId(!v || v === "none" ? "" : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecionar grupo (opcional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem grupo</SelectItem>
+                {grupos.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>{g.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="local">Local</Label>

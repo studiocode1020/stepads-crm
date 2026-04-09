@@ -10,6 +10,7 @@ const atualizarEventoSchema = z.object({
   tipo: z.string().optional().nullable(),
   descricao: z.string().optional().nullable(),
   companyId: z.string().optional().nullable(),
+  eventGroupId: z.string().optional().nullable(),
 });
 
 export const GET = async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -42,6 +43,7 @@ export const PATCH = async (req: NextRequest, { params }: { params: Promise<{ id
       tipo: dados.tipo ?? undefined,
       descricao: dados.descricao ?? undefined,
       companyId: dados.companyId,
+      eventGroupId: dados.eventGroupId,
     });
 
     return NextResponse.json({ success: true, data: evento });

@@ -6,13 +6,53 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Calendar, MapPin, Building2, Users, Mail, Phone, DollarSign } from "lucide-react";
+import {
+  ArrowLeft, Calendar, MapPin, Building2, Users, Mail, Phone, DollarSign,
+  FolderOpen, ChevronRight,
+} from "lucide-react";
 
 const STATUS_ESTILOS: Record<string, { label: string; classe: string }> = {
   planejamento: { label: "Em Planejamento", classe: "bg-blue-100 text-blue-800" },
   confirmado:   { label: "Confirmado",      classe: "bg-emerald-100 text-emerald-800" },
   realizado:    { label: "Realizado",       classe: "bg-gray-100 text-gray-700" },
   cancelado:    { label: "Cancelado",       classe: "bg-red-100 text-red-700" },
+};
+
+type DistribuicaoBarrasProps = {
+  titulo: string;
+  dados: { valor: string; total: number }[];
+};
+
+const DistribuicaoBarras = ({ titulo, dados }: DistribuicaoBarrasProps) => {
+  const max = dados.reduce((acc, d) => acc + d.total, 0);
+  return (
+    <div>
+      <p className="text-sm font-medium text-gray-700 mb-2">{titulo}</p>
+      {dados.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">Sem dados</p>
+      ) : (
+        <div className="space-y-2">
+          {dados.map((d) => {
+            const pct = max > 0 ? Math.round((d.total / max) * 100) : 0;
+            return (
+              <div key={d.valor}>
+                <div className="flex justify-between text-xs text-muted-foreground mb-0.5">
+                  <span className="capitalize">{d.valor}</span>
+                  <span>{pct}% ({d.total})</span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-1.5">
+                  <div
+                    className="bg-primary h-1.5 rounded-full transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export const dynamic = "force-dynamic";
@@ -29,12 +69,25 @@ const DetalheEventoPage = async ({ params }: { params: Promise<{ id: string }> }
 
   return (
     <div className="p-8 max-w-5xl">
-      <Button asChild variant="ghost" className="mb-6 -ml-2">
-        <Link href="/eventos">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Voltar para Eventos
-        </Link>
-      </Button>
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1.5 mb-6 text-sm text-muted-foreground">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2">
+          <Link href="/eventos">Eventos</Link>
+        </Button>
+        {evento.eventGroup && (
+          <>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <Button asChild variant="ghost" size="sm" className="h-8 px-2 flex items-center gap-1">
+              <Link href={`/eventos/grupo/${evento.eventGroup.id}`}>
+                <FolderOpen className="w-3.5 h-3.5" />
+                {evento.eventGroup.nome}
+              </Link>
+            </Button>
+          </>
+        )}
+        <ChevronRight className="w-3.5 h-3.5" />
+        <span className="text-gray-600 font-medium truncate max-w-48">{evento.nome}</span>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Info do evento */}
@@ -68,6 +121,14 @@ const DetalheEventoPage = async ({ params }: { params: Promise<{ id: string }> }
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Building2 className="w-4 h-4 text-primary" />
                     <span>{evento.company.nome}</span>
+                  </div>
+                )}
+                {evento.eventGroup && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <FolderOpen className="w-4 h-4 text-primary" />
+                    <Link href={`/eventos/grupo/${evento.eventGroup.id}`} className="hover:text-primary transition-colors">
+                      {evento.eventGroup.nome}
+                    </Link>
                   </div>
                 )}
               </div>
@@ -134,6 +195,20 @@ const DetalheEventoPage = async ({ params }: { params: Promise<{ id: string }> }
           )}
         </div>
       </div>
+
+      {/* Distribuições desta edição */}
+      <Card className="shadow-sm mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Perfil dos Participantes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <DistribuicaoBarras titulo="Gênero" dados={evento.distribuicoes.genero} />
+            <DistribuicaoBarras titulo="Origem" dados={evento.distribuicoes.origem} />
+            <DistribuicaoBarras titulo="Estado (top 5)" dados={evento.distribuicoes.estado} />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Lista de participantes */}
       <Card className="shadow-sm">
